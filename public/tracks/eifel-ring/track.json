@@ -1,0 +1,79 @@
+{
+  "meta": {
+    "id": "eifel-ring",
+    "name": "Eifel Ring",
+    "author": "Drivee",
+    "version": 1
+  },
+  "centreline": {
+    "width": 11,
+    "points": [
+      { "p": [-600, 80, 0] },
+      { "p": [-200, 72, 0] },
+      { "p": [200, 60, -10] },
+      { "p": [420, 52, 40] },
+      { "p": [600, 45, 160] },
+      { "p": [700, 40, 320] },
+      { "p": [720, 36, 470] },
+      { "p": [680, 35, 560], "width": 13 },
+      { "p": [600, 35, 580], "width": 13 },
+      { "p": [540, 36, 520], "width": 13 },
+      { "p": [520, 42, 420] },
+      { "p": [440, 50, 360] },
+      { "p": [420, 58, 270] },
+      { "p": [330, 66, 220] },
+      { "p": [250, 72, 280] },
+      { "p": [222, 77.5, 340] },
+      { "p": [200, 80, 400] },
+      { "p": [185, 79, 460] },
+      { "p": [160, 74, 560] },
+      { "p": [60, 78, 700], "banking": 4 },
+      { "p": [-60, 82, 740], "banking": 8 },
+      { "p": [-150, 85, 690], "banking": 8 },
+      { "p": [-170, 86, 590], "banking": 4 },
+      { "p": [-250, 90, 520] },
+      { "p": [-500, 104, 520] },
+      { "p": [-750, 115, 500] },
+      { "p": [-860, 118, 420] },
+      { "p": [-900, 116, 300] },
+      { "p": [-880, 108, 160] },
+      { "p": [-800, 96, 60] },
+      { "p": [-700, 86, 0] }
+    ]
+  },
+  "roadside": {
+    "vergeWidth": 5,
+    "barrierHeight": 0.75,
+    "kerbRadius": 180,
+    "kerbWidth": 1.2
+  },
+  "race": {
+    "startDistance": 120
+  },
+  "terrain": {
+    "seed": 1977,
+    "resolution": 4,
+    "margin": 450,
+    "corridorInner": 3,
+    "corridorOuter": 70,
+    "roadDrop": 0.25,
+    "hillHeight": 35,
+    "hillScale": 500,
+    "mountains": {
+      "startOffset": 150,
+      "outerRadius": 9000,
+      "peakHeight": 1050
+    }
+  },
+  "forest": {
+    "seed": 4242,
+    "density": 230,
+    "clearance": 5,
+    "meadowAmount": 0.25,
+    "broadleaf": 0.2
+  },
+  "environment": {
+    "fogNear": 300,
+    "fogFar": 5500
+  }
+}

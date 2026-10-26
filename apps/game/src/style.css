@@ -1,0 +1,175 @@
+:root {
+  --hud-font: 'Russo One', 'Segoe UI', system-ui, sans-serif;
+  --hud-fg: #fff;
+  --hud-accent: #ffb400;
+  --hud-hot: #ff2d2d;
+  --hud-panel: rgba(8, 10, 14, 0.55);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  color: var(--hud-fg);
+  font-family: var(--hud-font);
+}
+
+#viewport {
+  position: fixed;
+  inset: 0;
+}
+
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+#loading {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  letter-spacing: 0.1em;
+  background: #0b0d12;
+}
+
+#loading.error {
+  color: var(--hud-hot);
+  font-size: 18px;
+  padding: 24px;
+  text-align: center;
+}
+
+.hud-cluster {
+  position: absolute;
+  right: 32px;
+  bottom: 28px;
+  width: 300px;
+  padding: 16px 20px;
+  background: var(--hud-panel);
+  border-left: 4px solid var(--hud-accent);
+  transform: skewX(-8deg);
+}
+
+.hud-gear {
+  position: absolute;
+  right: 20px;
+  top: 10px;
+  font-size: 56px;
+  line-height: 1;
+  color: var(--hud-accent);
+}
+
+.hud-speed span {
+  font-size: 64px;
+  line-height: 1;
+}
+
+.hud-speed small {
+  margin-left: 8px;
+  font-size: 16px;
+  opacity: 0.7;
+}
+
+.hud-rev {
+  position: relative;
+  height: 12px;
+  margin-top: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.hud-rev-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #7fe3ff, var(--hud-accent));
+  transform-origin: left;
+  transform: scaleX(0);
+}
+
+.hud-rev-fill.hot {
+  background: var(--hud-hot);
+}
+
+.hud-rev-red {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8%;
+  height: 100%;
+  background: rgba(255, 45, 45, 0.45);
+}
+
+.hud-rpm {
+  margin-top: 4px;
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.hud-badges {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.hud-badges span {
+  padding: 2px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  opacity: 0.35;
+}
+
+.hud-badges span.on {
+  opacity: 1;
+  border-color: var(--hud-accent);
+  color: var(--hud-accent);
+}
+
+.hud-info {
+  position: absolute;
+  left: 16px;
+  top: 12px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.hud-help {
+  position: absolute;
+  left: 16px;
+  bottom: 14px;
+  max-width: 560px;
+  font-size: 12px;
+  line-height: 1.6;
+  opacity: 0.7;
+}
+
+.hud-paused {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 64px;
+  letter-spacing: 0.2em;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+@media (max-width: 700px) {
+  .hud-cluster {
+    right: 16px;
+    bottom: 16px;
+    width: 220px;
+  }
+  .hud-help {
+    display: none;
+  }
+}

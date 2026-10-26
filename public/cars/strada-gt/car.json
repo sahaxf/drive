@@ -1,0 +1,106 @@
+{
+  "id": "strada-gt",
+  "name": "Strada GT",
+  "visual": {
+    "paintColor": "#d01c1f"
+  },
+  "chassis": {
+    "mass": 1350,
+    "halfExtents": [0.92, 0.32, 2.2],
+    "centerOfMass": [0, -0.12, -0.1],
+    "inertiaScale": [1, 1, 1]
+  },
+  "wheels": {
+    "radius": 0.34,
+    "width": 0.26,
+    "inertia": 1.2,
+    "frontAxleZ": 1.35,
+    "rearAxleZ": -1.25,
+    "trackFront": 1.6,
+    "trackRear": 1.62,
+    "mountY": 0.0,
+    "rollInfluence": 0.75
+  },
+  "suspension": {
+    "front": {
+      "restLength": 0.3,
+      "stiffness": 38000,
+      "bumpDamping": 3200,
+      "reboundDamping": 4200,
+      "antiRoll": 14000
+    },
+    "rear": {
+      "restLength": 0.3,
+      "stiffness": 36000,
+      "bumpDamping": 3000,
+      "reboundDamping": 4000,
+      "antiRoll": 9000
+    }
+  },
+  "tyres": {
+    "front": {
+      "grip": 1.15,
+      "lateralB": 10,
+      "lateralC": 1.9,
+      "lateralE": 0.97,
+      "loadSensitivity": 0.08,
+      "slidingGrip": 0.8,
+      "rollingResistance": 0.012
+    },
+    "rear": {
+      "grip": 1.15,
+      "lateralB": 10,
+      "lateralC": 1.9,
+      "lateralE": 0.97,
+      "loadSensitivity": 0.08,
+      "slidingGrip": 0.8,
+      "rollingResistance": 0.012
+    }
+  },
+  "steering": {
+    "maxAngleDeg": 32,
+    "highSpeed": 55,
+    "minLockFactor": 0.22
+  },
+  "engine": {
+    "idleRpm": 900,
+    "redlineRpm": 7800,
+    "launchRpm": 3200,
+    "torqueCurve": [
+      [0, 220],
+      [1000, 260],
+      [2500, 360],
+      [4000, 430],
+      [5500, 450],
+      [6800, 420],
+      [7800, 360],
+      [8500, 300]
+    ],
+    "engineBraking": 70
+  },
+  "gearbox": {
+    "ratios": [3.2, 2.2, 1.65, 1.3, 1.06, 0.88],
+    "reverse": 3.0,
+    "finalDrive": 3.6,
+    "efficiency": 0.88,
+    "shiftTime": 0.18,
+    "upshiftAt": 0.93,
+    "downshiftAt": 0.5
+  },
+  "drivetrain": {
+    "layout": "RWD"
+  },
+  "brakes": {
+    "maxTorque": 9000,
+    "frontBias": 0.64,
+    "handbrakeTorque": 3000
+  },
+  "aero": {
+    "dragArea": 0.85,
+    "downforceArea": 0.35
+  },
+  "assists": {
+    "tractionControl": true,
+    "abs": true
+  }
+}
