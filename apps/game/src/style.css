@@ -156,6 +156,7 @@ body {
   position: absolute;
   inset: 0;
   display: none;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   font-size: 64px;
@@ -172,4 +173,107 @@ body {
   .hud-help {
     display: none;
   }
+}
+
+.pair {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  width: 220px;
+  padding: 12px 14px;
+  background: var(--hud-panel);
+  border-left: 4px solid var(--hud-accent);
+  font-size: 12px;
+  text-align: center;
+  pointer-events: auto;
+}
+
+.pair-title {
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+
+.pair-qr svg {
+  display: block;
+  width: 168px;
+  height: 168px;
+  margin: 0 auto;
+  image-rendering: pixelated;
+}
+
+.pair-code {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.pair-code b {
+  font-size: 22px;
+  letter-spacing: 0.18em;
+  color: var(--hud-accent);
+  font-weight: normal;
+}
+
+.pair-url {
+  display: block;
+  margin-top: 4px;
+  color: inherit;
+  opacity: 0.75;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  word-break: break-all;
+  text-decoration: none;
+}
+
+.pair-next {
+  margin-top: 6px;
+  padding: 2px 8px;
+  background: transparent;
+  color: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.pair-state {
+  margin-top: 8px;
+  color: var(--hud-accent);
+}
+
+.pair-hint {
+  margin-top: 6px;
+  font-size: 10px;
+  opacity: 0.55;
+}
+
+.pair[data-mode='offline'] .pair-state {
+  color: var(--hud-hot);
+}
+
+/* Once driving, only the status line stays. */
+.pair[data-mode='driving'] {
+  width: auto;
+  padding: 6px 12px;
+}
+
+.pair[data-mode='driving'] > :not(.pair-state) {
+  display: none;
+}
+
+.pair[data-mode='driving'] .pair-state {
+  margin: 0;
+}
+
+.hud-paused small {
+  display: block;
+  margin-top: 12px;
+  font-size: 18px;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--hud-hot);
+}
+
+.hud-paused small:empty {
+  display: none;
 }

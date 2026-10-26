@@ -143,4 +143,14 @@ describe('Vehicle', () => {
     expect(sideways).toBeGreaterThan(2);
     expect(upright(car)).toBeGreaterThan(0.9);
   });
+  it('straightens up by itself when the steering is centred mid-corner at speed', () => {
+    for (const steer of [0.6, 1]) {
+      const { car, run } = setup();
+      run(1, {});
+      while (car.telemetry.speed < 28) run(0.1, { throttle: 1 });
+      run(1, { steer, throttle: 0.4 });
+      run(0.6, { steer: 0, throttle: 0.4 });
+      expect(Math.abs(car.body.angvel().y)).toBeLessThan(0.04); // under ~2°/s: driving straight again
+    }
+  });
 });

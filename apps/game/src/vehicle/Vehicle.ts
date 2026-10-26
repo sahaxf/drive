@@ -13,6 +13,18 @@ const GRAVITY = 9.81;
 const AIR_DENSITY = 1.225;
 const UP = new Vector3(0, 1, 0);
 
+// Stability assist tuning.
+/** Below this the car can't really slide and the assist stays out of the way, m/s. */
+const STABILITY_MIN_SPEED = 4;
+/** Fraction of the body's sideslip angle added to the front wheels as countersteer. */
+const COUNTERSTEER_GAIN = 0.8;
+/** Yaw rate beyond the steering's request that is left alone, rad/s (~3°/s). */
+const YAW_TOLERANCE = 0.05;
+/** How fast unrequested yaw is removed, 1/s (excess decays to a third in ~0.2 s). */
+const YAW_DAMPING = 6;
+/** Strongest corrective yaw acceleration, rad/s². */
+const MAX_YAW_CORRECTION = 3;
+
 export type WheelId = 'FL' | 'FR' | 'RL' | 'RR';
 
 export interface WheelState {
@@ -65,11 +77,14 @@ export class Vehicle {
   readonly telemetry: VehicleTelemetry;
   tractionControl: boolean;
   abs: boolean;
+  stability: boolean;
   /** Maps the collider under a wheel to a grip multiplier; the track installs its own. */
   surfaceGrip: (colliderHandle: number) => number = () => 1;
 
   private readonly drivetrain: DrivetrainState;
   private readonly nominalLoad: number;
+  private readonly yawInertia: number;
+  private readonly wheelbase: number;
 
   // Scratch vectors, reused every step to avoid garbage.
   private readonly pos = new Vector3();
@@ -125,6 +140,9 @@ export class Vehicle {
     this.drivetrain = createDrivetrainState(spec);
     this.tractionControl = spec.assists.tractionControl;
     this.abs = spec.assists.abs;
+    this.stability = spec.assists.stability;
+    this.yawInertia = inertia.y;
+    this.wheelbase = spec.wheels.frontAxleZ - spec.wheels.rearAxleZ;
     this.telemetry = {
       speed: 0,
       forwardSpeed: 0,
@@ -173,7 +191,8 @@ export class Vehicle {
       dt,
     );
 
-    const steerAngle = this.steerAngle(input.steer, Math.abs(forwardSpeed));
+    const driverAngle = this.steerAngle(input.steer, Math.abs(forwardSpeed));
+    const steerAngle = this.stability ? this.countersteer(driverAngle, linvel, forwardSpeed) : driverAngle;
     let wheelspin = false;
     let lockup = false;
     for (const w of this.wheels) {
@@ -185,6 +204,7 @@ export class Vehicle {
 
     this.applyAero(speed, forwardSpeed, dt);
     this.flushImpulses();
+    if (this.stability && !input.handbrake) this.dampYaw(driverAngle, forwardSpeed, dt);
 
     Object.assign(this.telemetry, {
       speed,
@@ -312,6 +332,45 @@ export class Vehicle {
       this.impulse.copy(w.contactNormal).multiplyScalar(w.load * dt);
       this.queueImpulse(this.impulse, w.contactPoint);
     }
+  }
+
+  /**
+   * Stability assist, part 1: turn the front wheels partly toward where the car is
+   * actually travelling. In a slide this is the countersteer a driver would apply; with
+   * the steering centred, it lets the rear tyres pull the car straight again.
+   */
+  private countersteer(driverAngle: number, linvel: { x: number; y: number; z: number }, forwardSpeed: number): number {
+    if (Math.abs(forwardSpeed) < STABILITY_MIN_SPEED) return driverAngle;
+    // Car-local +X is left; positive steer angles also point the wheels left.
+    this.tmp.set(1, 0, 0).applyQuaternion(this.rot);
+    const lateral = linvel.x * this.tmp.x + linvel.y * this.tmp.y + linvel.z * this.tmp.z;
+    const sideslip = Math.atan2(lateral, Math.abs(forwardSpeed));
+    const max = (this.spec.steering.maxAngleDeg * Math.PI) / 180;
+    return Math.max(-max, Math.min(max, driverAngle + sideslip * COUNTERSTEER_GAIN));
+  }
+
+  /**
+   * Stability assist, part 2: compare the yaw rate with what the steering asks for (a
+   * bicycle model, capped at what the tyres can sustain) and remove the excess with a
+   * yaw torque, as ESC does with individual-wheel braking.
+   */
+  private dampYaw(driverAngle: number, forwardSpeed: number, dt: number): void {
+    const speed = Math.abs(forwardSpeed);
+    if (speed < STABILITY_MIN_SPEED) return;
+    const w = this.body.angvel();
+    const yawRate = w.x * this.up.x + w.y * this.up.y + w.z * this.up.z;
+    // Downforce adds grip at speed, so the car may legitimately corner harder than 1 g × grip.
+    const downforce = 0.5 * AIR_DENSITY * this.spec.aero.downforceArea * speed * speed;
+    const aeroGain = 1 + downforce / (this.spec.chassis.mass * GRAVITY);
+    const gripLimit = (this.spec.tyres.front.grip * aeroGain * GRAVITY) / speed;
+    const target = Math.max(-gripLimit, Math.min(gripLimit, (forwardSpeed * Math.tan(driverAngle)) / this.wheelbase));
+    const excess = yawRate - target;
+    // Only the part of the excess outside the tolerance is corrected, so normal driving is untouched.
+    const over = Math.sign(excess) * Math.max(Math.abs(excess) - YAW_TOLERANCE, 0);
+    if (over === 0) return;
+    const correction = Math.min(Math.abs(over) * YAW_DAMPING, MAX_YAW_CORRECTION) * Math.sign(over);
+    const impulse = -correction * this.yawInertia * dt;
+    this.body.applyTorqueImpulse({ x: this.up.x * impulse, y: this.up.y * impulse, z: this.up.z * impulse }, true);
   }
 
   private steerAngle(steer: number, speed: number): number {

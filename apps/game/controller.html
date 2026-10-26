@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#0b0d12" />
+    <title>Drivee Controller</title>
+    <link rel="icon" href="data:," />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <!-- 1. Connect: room code + Start (the tap that unlocks fullscreen, sensors, vibration). -->
+    <section class="screen" id="connect">
+      <h1>DRIVEE</h1>
+      <label class="room">
+        Room
+        <input id="room" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" />
+      </label>
+      <button id="start" class="big" type="button">Start</button>
+      <p class="note" id="connect-note"></p>
+    </section>
+
+    <!-- 2. Calibrate: hold neutral and tap. -->
+    <section class="screen" id="calibrate" hidden>
+      <div class="wheel" data-wheel><div class="wheel-spoke"></div></div>
+      <p>Hold the phone like a steering wheel, straight ahead</p>
+      <p class="note">Tap anywhere to set the centre</p>
+      <p class="note" id="sensor-note"></p>
+    </section>
+
+    <!-- 3. Drive. -->
+    <section class="screen" id="drive" hidden>
+      <div class="zone brake" data-zone="brake"><div class="zone-fill"></div><span>BRAKE</span></div>
+      <div class="zone throttle" data-zone="throttle"><div class="zone-fill"></div><span>GAS</span></div>
+
+      <div class="topbar">
+        <button type="button" data-button="camera">CAM</button>
+        <button type="button" data-button="reset">RESET</button>
+        <button type="button" data-button="pause">PAUSE</button>
+        <button type="button" data-action="centre">CENTRE</button>
+        <button type="button" data-action="settings">⚙</button>
+      </div>
+
+      <div class="centre">
+        <div class="wheel small" data-wheel><div class="wheel-spoke"></div></div>
+        <div class="steer-bar"><div class="steer-fill" id="steer-fill"></div></div>
+        <div class="link" id="link"></div>
+      </div>
+
+      <button type="button" class="handbrake" data-button="handbrake">HANDBRAKE</button>
+      <div class="paused-badge" id="paused-badge" hidden>GAME PAUSED</div>
+    </section>
+
+    <section class="sheet" id="settings" hidden>
+      <h2>Steering</h2>
+      <label>Full lock at <output id="lock-out"></output>°<input id="lock" type="range" min="15" max="70" step="1" /></label>
+      <label>Deadzone <output id="dead-out"></output>°<input id="dead" type="range" min="0" max="8" step="0.5" /></label>
+      <label>Response curve <output id="curve-out"></output><input id="curve" type="range" min="0" max="1" step="0.05" /></label>
+      <button type="button" class="big" data-action="close-settings">Done</button>
+    </section>
+
+    <div class="rotate">Turn your phone sideways</div>
+    <script type="module" src="/src/controller/main.ts"></script>
+  </body>
+</html>

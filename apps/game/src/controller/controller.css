@@ -1,0 +1,342 @@
+:root {
+  --fg: #fff;
+  --accent: #ffb400;
+  --gas: #2fd16b;
+  --brake: #ff3b3b;
+  --bg: #0b0d12;
+  --panel: rgba(255, 255, 255, 0.06);
+  font-family: 'Russo One', 'Segoe UI', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: none;
+  touch-action: none;
+}
+
+.screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: center;
+  padding: 16px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 40px;
+  letter-spacing: 0.25em;
+  color: var(--accent);
+  font-style: italic;
+}
+
+.room {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+}
+
+.room input {
+  width: 5.2em;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 28px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--fg);
+  background: var(--panel);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.big {
+  min-width: 200px;
+  padding: 14px 32px;
+  font-size: 22px;
+  letter-spacing: 0.1em;
+  background: var(--accent);
+  color: #111;
+  border-radius: 8px;
+}
+
+.big:disabled {
+  opacity: 0.4;
+}
+
+.note {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.7;
+  max-width: 34em;
+}
+
+.note.bad {
+  color: var(--brake);
+  opacity: 1;
+}
+
+/* Steering wheel indicator, rotated by the phone's tilt. */
+.wheel {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  border: 10px solid var(--fg);
+  border-radius: 50%;
+  opacity: 0.9;
+}
+
+.wheel.small {
+  width: 64px;
+  height: 64px;
+  border-width: 6px;
+}
+
+.wheel-spoke {
+  position: absolute;
+  left: 50%;
+  top: -10%;
+  width: 6px;
+  height: 30%;
+  margin-left: -3px;
+  background: var(--accent);
+  border-radius: 3px;
+}
+
+/* --- Drive screen --- */
+#drive {
+  padding: 0;
+  gap: 0;
+}
+
+.zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 18px;
+  font-size: 18px;
+  letter-spacing: 0.2em;
+}
+
+.zone span {
+  position: relative;
+  opacity: 0.55;
+}
+
+.zone.brake {
+  left: 0;
+  background: linear-gradient(0deg, rgba(255, 59, 59, 0.18), rgba(255, 59, 59, 0.04));
+}
+
+.zone.throttle {
+  right: 0;
+  background: linear-gradient(0deg, rgba(47, 209, 107, 0.18), rgba(47, 209, 107, 0.04));
+}
+
+.zone-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 100%;
+  transform-origin: bottom;
+  transform: scaleY(0);
+  opacity: 0.45;
+}
+
+.brake .zone-fill {
+  background: var(--brake);
+}
+
+.throttle .zone-fill {
+  background: var(--gas);
+}
+
+.topbar {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  z-index: 2;
+}
+
+.topbar button,
+.handbrake {
+  padding: 8px 12px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+}
+
+.topbar button.down,
+.handbrake.down {
+  background: var(--accent);
+  color: #111;
+}
+
+.centre {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.steer-bar {
+  position: relative;
+  width: 140px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+.steer-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 50%;
+  background: var(--accent);
+  border-radius: 3px;
+  transform-origin: left;
+  transform: scaleX(0);
+}
+
+.link {
+  font-size: 12px;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.link.bad {
+  color: var(--brake);
+  opacity: 1;
+}
+
+.handbrake {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  padding: 14px 22px;
+  font-size: 14px;
+}
+
+.paused-badge {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  font-size: 14px;
+  letter-spacing: 0.15em;
+  color: #111;
+  background: var(--accent);
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* --- Settings sheet --- */
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 14px;
+  padding: 16px max(16px, 18vw);
+  background: rgba(11, 13, 18, 0.96);
+}
+
+.sheet h2 {
+  margin: 0;
+  color: var(--accent);
+  font-size: 20px;
+}
+
+.sheet label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.sheet input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+  touch-action: pan-x;
+}
+
+.sheet .big {
+  align-self: center;
+}
+
+.rotate {
+  display: none;
+}
+
+@media (orientation: portrait) {
+  .rotate {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    text-align: center;
+    font-size: 22px;
+    background: var(--bg);
+  }
+  body:not(.started) .rotate {
+    display: none;
+  }
+}

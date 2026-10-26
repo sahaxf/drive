@@ -4,14 +4,23 @@ import { parseCarSpec, parseTrackSpec, type CarSpec, type TrackSpec } from '@dri
 import { CameraRig } from './camera/CameraRig';
 import { GameLoop } from './core/GameLoop';
 import { GamepadInput } from './input/GamepadInput';
+import { HapticsDirector } from './input/haptics';
 import { Button, InputSystem } from './input/InputSystem';
 import { KeyboardInput } from './input/KeyboardInput';
+import { PhoneInput } from './input/PhoneInput';
 import { createWorld, initPhysics, PHYSICS_DT } from './physics/PhysicsWorld';
 import { CarView } from './render/CarView';
 import { Renderer } from './render/Renderer';
 import { buildTrackScene } from './render/track/buildTrackScene';
-import { addTrackPhysics, generateTrack, type GeneratedTrack, type GenerationStep } from './track/generateTrack';
+import {
+  addTrackPhysics,
+  generateTrack,
+  SURFACE_GRIP,
+  type GeneratedTrack,
+  type GenerationStep,
+} from './track/generateTrack';
 import { Hud } from './ui/Hud';
+import { PairingPanel } from './ui/PairingPanel';
 import { Vehicle } from './vehicle/Vehicle';
 
 const CAR_ID = 'strada-gt';
@@ -33,6 +42,8 @@ const STEP_LABELS: Record<GenerationStep | 'scene', string> = {
 export class Game {
   private readonly loop: GameLoop;
   private paused = false;
+  /** The game paused itself because the phone stopped sending; it resumes when it's back. */
+  private pausedForController = false;
 
   // Poses from the last two physics steps, blended for smooth rendering at any frame rate.
   private readonly prevPosition = new Vector3();
@@ -41,6 +52,11 @@ export class Game {
   private readonly currRotation = new Quaternion();
   private readonly renderPosition = new Vector3();
   private readonly renderRotation = new Quaternion();
+
+  // Impact detection for haptics: largest per-step velocity change since the last frame.
+  private readonly lastVelocity = new Vector3();
+  private readonly velocity = new Vector3();
+  private impact = 0;
 
   static async create(
     viewport: HTMLElement,
@@ -71,7 +87,10 @@ export class Game {
   private readonly carView: CarView;
   private readonly cameraRig: CameraRig;
   private readonly input: InputSystem;
+  private readonly phone: PhoneInput;
+  private readonly haptics = new HapticsDirector();
   private readonly hud: Hud;
+  private readonly pairing: PairingPanel;
 
   private constructor(
     viewport: HTMLElement,
@@ -91,8 +110,11 @@ export class Game {
     this.renderer.scene.add(this.carView.root);
     this.cameraRig = new CameraRig(this.renderer.camera);
 
-    this.input = new InputSystem([new KeyboardInput(), new GamepadInput()]);
+    this.phone = new PhoneInput();
+    this.phone.connect();
+    this.input = new InputSystem([new KeyboardInput(), new GamepadInput(), this.phone]);
     this.hud = new Hud(hudRoot);
+    this.pairing = new PairingPanel(hudRoot);
 
     this.placeOnTrack(track.spec.race.startDistance - GRID_OFFSET);
     this.loop = new GameLoop(
@@ -111,7 +133,20 @@ export class Game {
 
   private beginFrame(dt: number): void {
     this.input.update(dt);
-    if (this.input.pressed(Button.Pause)) this.paused = !this.paused;
+    for (let event = this.phone.takeEvent(); event; event = this.phone.takeEvent()) {
+      if (event === 'lost' && !this.paused) {
+        this.paused = true;
+        this.pausedForController = true;
+      } else if (event === 'regained' && this.pausedForController) {
+        this.paused = false;
+        this.pausedForController = false;
+      }
+    }
+    if (this.input.pressed(Button.Pause)) {
+      this.paused = !this.paused;
+      this.pausedForController = false;
+    }
+    this.phone.setPaused(this.paused);
     if (this.input.pressed(Button.Camera)) this.cameraRig.cycle();
     if (this.input.pressed(Button.ToggleTractionControl)) this.vehicle.tractionControl = !this.vehicle.tractionControl;
     if (this.input.pressed(Button.ToggleAbs)) this.vehicle.abs = !this.vehicle.abs;
@@ -123,6 +158,10 @@ export class Game {
     this.vehicle.step(this.input.current, dt);
     this.world.step();
     this.capturePose();
+    const v = this.vehicle.body.linvel();
+    this.velocity.set(v.x, v.y, v.z);
+    this.impact = Math.max(this.impact, this.velocity.distanceTo(this.lastVelocity));
+    this.lastVelocity.copy(this.velocity);
     const ground = this.track.terrain.heightAt(this.currPosition.x, this.currPosition.z);
     if (this.currPosition.y < ground - FELL_THROUGH) this.resetToTrack();
   }
@@ -136,6 +175,8 @@ export class Game {
     this.cameraRig.update(frameDt, this.renderPosition, this.renderRotation, t.speed);
     this.renderer.setShadowFocus(this.renderPosition);
     this.renderer.render();
+    this.updateHaptics(frameDt);
+    this.pairing.update(this.phone.status);
 
     this.hud.update(
       {
@@ -146,9 +187,29 @@ export class Game {
         camera: this.cameraRig.mode,
         inputSource: this.input.activeSource,
         paused: this.paused,
+        pauseReason: this.pausedForController ? 'Controller disconnected' : '',
+        inputDetail:
+          this.input.activeSource === 'phone' && this.phone.status.rttMs !== null
+            ? ` (${Math.round(this.phone.status.rttMs)} ms)`
+            : '',
       },
       frameDt,
     );
+  }
+
+  private updateHaptics(dt: number): void {
+    const t = this.vehicle.telemetry;
+    const pattern = this.haptics.update(
+      {
+        onKerb: this.vehicle.wheels.some((w) => w.grounded && w.surfaceGrip === SURFACE_GRIP.kerb),
+        speed: t.speed,
+        impact: this.paused ? 0 : this.impact,
+        atLimiter: t.throttle > 0.5 && t.rpm >= this.spec.engine.redlineRpm * 0.99,
+      },
+      dt,
+    );
+    this.impact = 0;
+    if (pattern) this.phone.buzz(pattern);
   }
 
   /** Back onto the centreline at the nearest point, facing the racing direction. */
@@ -163,6 +224,9 @@ export class Game {
     this.vehicle.reset(position, Math.atan2(frame.tangent.x, frame.tangent.z));
     this.capturePose();
     this.capturePose();
+    // A reset teleports the car: not an impact.
+    this.lastVelocity.set(0, 0, 0);
+    this.impact = 0;
     this.cameraRig.snap();
   }
 

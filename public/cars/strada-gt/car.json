@@ -39,7 +39,7 @@
   },
   "tyres": {
     "front": {
-      "grip": 1.15,
+      "grip": 1.35,
       "lateralB": 10,
       "lateralC": 1.9,
       "lateralE": 0.97,
@@ -48,7 +48,7 @@
       "rollingResistance": 0.012
     },
     "rear": {
-      "grip": 1.15,
+      "grip": 1.42,
       "lateralB": 10,
       "lateralC": 1.9,
       "lateralE": 0.97,
@@ -59,8 +59,8 @@
   },
   "steering": {
     "maxAngleDeg": 32,
-    "highSpeed": 55,
-    "minLockFactor": 0.22
+    "highSpeed": 45,
+    "minLockFactor": 0.3
   },
   "engine": {
     "idleRpm": 900,
@@ -96,11 +96,12 @@
     "handbrakeTorque": 3000
   },
   "aero": {
-    "dragArea": 0.85,
-    "downforceArea": 0.35
+    "dragArea": 0.88,
+    "downforceArea": 1.4
   },
   "assists": {
     "tractionControl": true,
-    "abs": true
+    "abs": true,
+    "stability": true
   }
 }

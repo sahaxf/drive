@@ -124,6 +124,8 @@ export const carSpecSchema = z.object({
   assists: z.object({
     tractionControl: z.boolean(),
     abs: z.boolean(),
+    /** Countersteers into slides and damps yaw the steering didn't ask for (like ESC). */
+    stability: z.boolean().default(true),
   }),
 });
 

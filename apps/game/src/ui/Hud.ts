@@ -8,6 +8,10 @@ export interface HudState {
   camera: string;
   inputSource: string;
   paused: boolean;
+  /** Shown under PAUSED, e.g. why the game paused itself. */
+  pauseReason: string;
+  /** Extra input detail for the info line (phone round trip). */
+  inputDetail: string;
 }
 
 /** Minimal M1 HUD: speed, gear, rev bar, assist badges. The styled 90s HUD comes in M7. */
@@ -20,6 +24,7 @@ export class Hud {
   private readonly abs: HTMLElement;
   private readonly info: HTMLElement;
   private readonly paused: HTMLElement;
+  private readonly reason: HTMLElement;
   private fps = 60;
 
   constructor(root: HTMLElement) {
@@ -36,7 +41,7 @@ export class Hud {
         W/S or ↑/↓ throttle · brake (hold at a stop to reverse) · A/D or ←/→ steer · Space handbrake<br>
         C camera · R reset · T traction control · B ABS · P pause
       </div>
-      <div class="hud-paused" data-el="paused">PAUSED</div>
+      <div class="hud-paused" data-el="paused">PAUSED<small data-el="reason"></small></div>
     `;
     const el = (name: string) => root.querySelector<HTMLElement>(`[data-el="${name}"]`)!;
     this.speed = el('speed');
@@ -47,6 +52,7 @@ export class Hud {
     this.abs = el('abs');
     this.info = el('info');
     this.paused = el('paused');
+    this.reason = el('reason');
   }
 
   update(state: HudState, frameDt: number): void {
@@ -60,7 +66,8 @@ export class Hud {
     this.rpm.textContent = (Math.round(t.rpm / 50) * 50).toString();
     this.tc.classList.toggle('on', state.tractionControl);
     this.abs.classList.toggle('on', state.abs);
-    this.info.textContent = `${Math.round(this.fps)} fps · ${state.camera} cam · input: ${state.inputSource}`;
+    this.info.textContent = `${Math.round(this.fps)} fps · ${state.camera} cam · input: ${state.inputSource}${state.inputDetail}`;
     this.paused.style.display = state.paused ? 'flex' : 'none';
+    this.reason.textContent = state.pauseReason;
   }
 }
