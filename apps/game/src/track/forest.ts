@@ -62,12 +62,12 @@ export function placeForest(
       const chance = Math.max(field.woodedness(x, z), MEADOW_TREES);
       const roll = random();
       const kind = random();
-      const scale = 0.75 + random() * 0.7;
+      const scale = 1.5 + random() * 1.1;
       const rotation = random() * Math.PI * 2;
       const tint = 0.82 + random() * 0.3;
       if (roll > chance) continue;
       // Bigger trees need more room from the barrier so their canopy doesn't overhang it.
-      if (terrain.roadDistanceAt(x, z) < clearance + scale * 2.5) continue;
+      if (terrain.roadDistanceAt(x, z) < clearance + scale * 2.8) continue;
       const h = terrain.heightAt(x, z);
       const r = terrain.resolution;
       const slope = Math.hypot(terrain.heightAt(x + r, z) - h, terrain.heightAt(x, z + r) - h) / r;
@@ -105,7 +105,7 @@ function placeFarForest(spec: TrackSpec, field: WorldField, near: TerrainGrid, f
       const x = gx + (random() - 0.5) * spacing * 0.9;
       const z = gz + (random() - 0.5) * spacing * 0.9;
       const roll = random();
-      const scale = 1.1 + random() * 0.7;
+      const scale = 2.2 + random() * 0.9;
       const rotation = random() * Math.PI * 2;
       const tint = 0.8 + random() * 0.3;
       if (x > minX && x < maxX && z > minZ && z < maxZ) continue;

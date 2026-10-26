@@ -67,7 +67,7 @@
   },
   "forest": {
     "seed": 4242,
-    "density": 230,
+    "density": 160,
     "clearance": 5,
     "meadowAmount": 0.25,
     "broadleaf": 0.2

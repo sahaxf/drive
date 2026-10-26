@@ -1,4 +1,11 @@
 import { CanvasTexture, ClampToEdgeWrapping, RepeatWrapping, SRGBColorSpace } from 'three';
+import { ASPHALT_TILE } from '../track/road';
+
+/** Centre line: dash and gap lengths in metres; dash + gap must divide ASPHALT_TILE. */
+const CENTRE_DASH = 4;
+const CENTRE_GAP = 6;
+/** Painted line widths as a fraction of the road width (~15 cm on an 11 m road). */
+const CENTRE_LINE_WIDTH = 0.014;
 
 /**
  * Procedural canvas textures for the track. Cheap to make, nothing to download, and
@@ -32,7 +39,7 @@ function finish(texture: CanvasTexture, anisotropy: number, colour = true): Canv
 
 /** u = across the road (0 left edge, 1 right edge), v = along it. */
 export function asphaltTexture(anisotropy: number): CanvasTexture {
-  const [w, h] = [256, 512];
+  const [w, h] = [512, 1024];
   const [c, ctx] = canvas(w, h);
   ctx.fillStyle = '#3c3f42';
   ctx.fillRect(0, 0, w, h);
@@ -49,6 +56,11 @@ export function asphaltTexture(anisotropy: number): CanvasTexture {
   ctx.fillStyle = '#e8e6df';
   ctx.fillRect(0.012 * w, 0, 0.022 * w, h);
   ctx.fillRect(0.966 * w, 0, 0.022 * w, h);
+  // Dashed centre line, repeating seamlessly from one texture tile to the next.
+  const pxPerMetre = h / ASPHALT_TILE;
+  for (let v = 0; v < ASPHALT_TILE; v += CENTRE_DASH + CENTRE_GAP) {
+    ctx.fillRect((0.5 - CENTRE_LINE_WIDTH / 2) * w, v * pxPerMetre, CENTRE_LINE_WIDTH * w, CENTRE_DASH * pxPerMetre);
+  }
   const texture = finish(new CanvasTexture(c), anisotropy);
   texture.wrapS = ClampToEdgeWrapping;
   return texture;
