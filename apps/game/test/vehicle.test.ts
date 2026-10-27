@@ -86,9 +86,9 @@ describe('Vehicle', () => {
     const start = car.body.translation().z;
     while (car.telemetry.forwardSpeed > 0.3) run(0.05, { brake: 1 });
     const distance = car.body.translation().z - start;
-    // Real performance cars: ~33-38 m.
-    expect(distance).toBeGreaterThan(28);
-    expect(distance).toBeLessThan(45);
+    // Arcade-grip tyres (~1.7 g) stop shorter than a real performance car (~33-38 m).
+    expect(distance).toBeGreaterThan(18);
+    expect(distance).toBeLessThan(32);
     expect(upright(car)).toBeGreaterThan(0.98);
   });
 
@@ -120,6 +120,8 @@ describe('Vehicle', () => {
   it('spins the rear wheels on launch without traction control', () => {
     const { car, run } = setup((s) => {
       s.assists.tractionControl = false;
+      // The stock tyres out-grip the engine; on road-car grip the rears can still be lit up.
+      s.tyres.rear.grip = 1.1;
     });
     run(1, {});
     let spun = false;

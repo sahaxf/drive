@@ -39,7 +39,7 @@
   },
   "tyres": {
     "front": {
-      "grip": 1.35,
+      "grip": 1.7,
       "lateralB": 10,
       "lateralC": 1.9,
       "lateralE": 0.97,
@@ -48,7 +48,7 @@
       "rollingResistance": 0.012
     },
     "rear": {
-      "grip": 1.42,
+      "grip": 1.78,
       "lateralB": 10,
       "lateralC": 1.9,
       "lateralE": 0.97,
@@ -97,7 +97,7 @@
   },
   "aero": {
     "dragArea": 0.88,
-    "downforceArea": 1.4
+    "downforceArea": 3
   },
   "assists": {
     "tractionControl": true,
