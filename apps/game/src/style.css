@@ -1,9 +1,13 @@
 :root {
-  --hud-font: 'Russo One', 'Segoe UI', system-ui, sans-serif;
+  --hud-font: 'Inter', 'Segoe UI', system-ui, sans-serif;
   --hud-fg: #fff;
-  --hud-accent: #ffb400;
-  --hud-hot: #ff2d2d;
-  --hud-panel: rgba(8, 10, 14, 0.55);
+  --hud-dim: rgba(255, 255, 255, 0.7);
+  --hud-faint: rgba(255, 255, 255, 0.45);
+  --hud-line: rgba(255, 255, 255, 0.22);
+  /* Best lap (as in timing screens). */
+  --hud-best: #d2b4ff;
+  --hud-hot: #ff4d4d;
+  --hud-panel: rgba(8, 10, 14, 0.5);
 }
 
 * {
@@ -25,11 +29,37 @@ body {
   inset: 0;
 }
 
+/* Everything in the HUD is upper case, light and widely spaced; numbers don't jitter. */
 #hud {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
+}
+
+/* Soft shade along the top and bottom edges keeps thin text readable over bright sky. */
+#hud::before,
+#hud::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 190px;
+  pointer-events: none;
+}
+
+#hud::before {
+  top: 0;
+  background: linear-gradient(rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0));
+}
+
+#hud::after {
+  bottom: 0;
+  background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.38));
 }
 
 #loading {
@@ -38,60 +68,97 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
-  letter-spacing: 0.1em;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
   background: #0b0d12;
 }
 
 #loading.error {
   color: var(--hud-hot);
-  font-size: 18px;
+  letter-spacing: 0.1em;
   padding: 24px;
   text-align: center;
 }
 
-.hud-cluster {
+.hud-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  color: var(--hud-dim);
+}
+
+/* --- Lap timing, top left --- */
+
+.hud-lap {
   position: absolute;
-  right: 32px;
-  bottom: 28px;
-  width: 300px;
-  padding: 16px 20px;
-  background: var(--hud-panel);
-  border-left: 4px solid var(--hud-accent);
-  transform: skewX(-8deg);
+  top: 28px;
+  left: 32px;
+  min-width: 190px;
 }
 
-.hud-gear {
+.hud-time {
+  margin: 6px 0 10px;
+  padding-bottom: 10px;
+  font-size: 30px;
+  font-weight: 300;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  border-bottom: 1px solid var(--hud-line);
+}
+
+.hud-time.idle {
+  color: var(--hud-faint);
+}
+
+.hud-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 24px;
+  margin-top: 4px;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+}
+
+.hud-row.best span:last-child {
+  color: var(--hud-best);
+}
+
+/* --- Speed, gear, revs, bottom right --- */
+
+.hud-drive {
   position: absolute;
-  right: 20px;
-  top: 10px;
-  font-size: 56px;
-  line-height: 1;
-  color: var(--hud-accent);
+  right: 36px;
+  bottom: 30px;
+  width: 220px;
+  text-align: right;
 }
 
-.hud-speed span {
-  font-size: 64px;
-  line-height: 1;
+.hud-speed {
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 10px;
 }
 
-.hud-speed small {
-  margin-left: 8px;
-  font-size: 16px;
-  opacity: 0.7;
+.hud-speed span:first-child {
+  font-size: 72px;
+  font-weight: 200;
+  letter-spacing: 0;
+  line-height: 1;
 }
 
 .hud-rev {
-  position: relative;
-  height: 12px;
-  margin-top: 10px;
-  background: rgba(255, 255, 255, 0.12);
-  overflow: hidden;
+  height: 2px;
+  margin: 12px 0 10px;
+  background: var(--hud-line);
 }
 
 .hud-rev-fill {
   height: 100%;
-  background: linear-gradient(90deg, #7fe3ff, var(--hud-accent));
+  background: var(--hud-fg);
   transform-origin: left;
   transform: scaleX(0);
 }
@@ -100,57 +167,99 @@ body {
   background: var(--hud-hot);
 }
 
-.hud-rev-red {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 8%;
-  height: 100%;
-  background: rgba(255, 45, 45, 0.45);
-}
-
-.hud-rpm {
-  margin-top: 4px;
-  font-size: 13px;
-  opacity: 0.75;
-}
-
-.hud-badges {
-  margin-top: 8px;
+.hud-meta {
   display: flex;
-  gap: 8px;
-  font-size: 12px;
+  justify-content: space-between;
+  align-items: baseline;
 }
 
-.hud-badges span {
-  padding: 2px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  opacity: 0.35;
+.hud-gear {
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  margin-left: 8px;
 }
 
-.hud-badges span.on {
-  opacity: 1;
-  border-color: var(--hud-accent);
-  color: var(--hud-accent);
+.hud-assists {
+  display: flex;
+  gap: 12px;
 }
+
+.hud-assists .hud-label.on {
+  color: var(--hud-fg);
+}
+
+/* --- Lap notification, top centre --- */
+
+.hud-toast {
+  position: absolute;
+  top: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  opacity: 0;
+}
+
+.hud-toast.show {
+  animation: hud-toast 4s ease forwards;
+}
+
+.hud-toast div:last-child {
+  margin-top: 6px;
+  font-size: 26px;
+  font-weight: 300;
+  letter-spacing: 0.06em;
+}
+
+.hud-toast.best .hud-label,
+.hud-toast.best div:last-child {
+  color: var(--hud-best);
+}
+
+@keyframes hud-toast {
+  0% {
+    opacity: 0;
+  }
+  8%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* --- Bottom left: status and controls --- */
 
 .hud-info {
   position: absolute;
-  left: 16px;
-  top: 12px;
-  font-size: 12px;
-  opacity: 0.7;
+  left: 32px;
+  bottom: 30px;
+  font-size: 10px;
+  color: var(--hud-faint);
 }
 
 .hud-help {
   position: absolute;
-  left: 16px;
-  bottom: 14px;
-  max-width: 560px;
-  font-size: 12px;
-  line-height: 1.6;
-  opacity: 0.7;
+  left: 32px;
+  bottom: 52px;
+  display: none;
+  grid-template-columns: auto auto;
+  gap: 4px 18px;
+  font-size: 11px;
+  color: var(--hud-dim);
 }
+
+.hud-help.open {
+  display: grid;
+}
+
+.hud-help b {
+  font-weight: 600;
+  color: var(--hud-fg);
+}
+
+/* --- Pause --- */
 
 .hud-paused {
   position: absolute;
@@ -159,92 +268,124 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 64px;
-  letter-spacing: 0.2em;
-  background: rgba(0, 0, 0, 0.35);
+  font-size: 22px;
+  font-weight: 300;
+  letter-spacing: 0.5em;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.hud-paused small {
+  display: block;
+  margin-top: 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  color: var(--hud-hot);
+}
+
+.hud-paused small:empty {
+  display: none;
 }
 
 @media (max-width: 700px) {
-  .hud-cluster {
+  .hud-lap {
+    top: 16px;
+    left: 16px;
+  }
+  .hud-drive {
     right: 16px;
     bottom: 16px;
-    width: 220px;
+    width: 170px;
   }
+  .hud-speed span:first-child {
+    font-size: 52px;
+  }
+  .hud-info,
   .hud-help {
     display: none;
   }
 }
 
+/* --- Phone pairing panel, top right --- */
+
 .pair {
   position: absolute;
-  top: 12px;
-  right: 16px;
-  width: 220px;
-  padding: 12px 14px;
+  top: 28px;
+  right: 32px;
+  width: 210px;
+  padding: 14px;
   background: var(--hud-panel);
-  border-left: 4px solid var(--hud-accent);
-  font-size: 12px;
+  border: 1px solid var(--hud-line);
+  font-size: 10px;
   text-align: center;
   pointer-events: auto;
 }
 
 .pair-title {
-  font-size: 14px;
-  letter-spacing: 0.04em;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  color: var(--hud-dim);
 }
 
 .pair-qr svg {
   display: block;
-  width: 168px;
-  height: 168px;
+  width: 160px;
+  height: 160px;
   margin: 0 auto;
   image-rendering: pixelated;
 }
 
 .pair-code {
-  margin-top: 8px;
-  font-size: 13px;
+  margin-top: 10px;
+  color: var(--hud-dim);
+  letter-spacing: 0.24em;
 }
 
 .pair-code b {
-  font-size: 22px;
-  letter-spacing: 0.18em;
-  color: var(--hud-accent);
-  font-weight: normal;
+  margin-left: 6px;
+  font-size: 20px;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  color: var(--hud-fg);
 }
 
+/* The address is case-sensitive: never upper-case it. */
 .pair-url {
   display: block;
-  margin-top: 4px;
-  color: inherit;
-  opacity: 0.75;
+  margin-top: 6px;
+  color: var(--hud-dim);
   font-family: ui-monospace, Consolas, monospace;
-  font-size: 11px;
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: none;
   word-break: break-all;
   text-decoration: none;
 }
 
 .pair-next {
-  margin-top: 6px;
-  padding: 2px 8px;
+  margin-top: 8px;
+  padding: 3px 8px;
   background: transparent;
-  color: inherit;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: var(--hud-dim);
+  border: 1px solid var(--hud-line);
   font: inherit;
-  font-size: 11px;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
   cursor: pointer;
 }
 
 .pair-state {
-  margin-top: 8px;
-  color: var(--hud-accent);
+  margin-top: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
 }
 
 .pair-hint {
   margin-top: 6px;
-  font-size: 10px;
-  opacity: 0.55;
+  font-size: 9px;
+  color: var(--hud-faint);
 }
 
 .pair[data-mode='offline'] .pair-state {
@@ -254,7 +395,9 @@ body {
 /* Once driving, only the status line stays. */
 .pair[data-mode='driving'] {
   width: auto;
-  padding: 6px 12px;
+  padding: 0;
+  background: none;
+  border: none;
 }
 
 .pair[data-mode='driving'] > :not(.pair-state) {
@@ -263,17 +406,5 @@ body {
 
 .pair[data-mode='driving'] .pair-state {
   margin: 0;
-}
-
-.hud-paused small {
-  display: block;
-  margin-top: 12px;
-  font-size: 18px;
-  letter-spacing: 0.08em;
-  text-align: center;
-  color: var(--hud-hot);
-}
-
-.hud-paused small:empty {
-  display: none;
+  color: var(--hud-dim);
 }

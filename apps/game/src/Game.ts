@@ -9,6 +9,7 @@ import { Button, InputSystem } from './input/InputSystem';
 import { KeyboardInput } from './input/KeyboardInput';
 import { PhoneInput } from './input/PhoneInput';
 import { createWorld, initPhysics, PHYSICS_DT } from './physics/PhysicsWorld';
+import { LapTimer } from './race/LapTimer';
 import { CarView } from './render/CarView';
 import { Renderer } from './render/Renderer';
 import { buildTrackScene } from './render/track/buildTrackScene';
@@ -25,6 +26,9 @@ import { Vehicle } from './vehicle/Vehicle';
 
 const CAR_ID = 'strada-gt';
 const TRACK_ID = 'eifel-ring';
+/** Further than this from the centreline, lap progress isn't tracked (the clock still runs). */
+const LAP_TRACK_RANGE = 40;
+const BEST_LAP_KEY = `drivee.bestLap.${TRACK_ID}`;
 /** Height above the road surface the car is dropped from on spawn/reset. */
 const SPAWN_LIFT = 0.7;
 /** Grid slot: metres behind the start line. */
@@ -90,6 +94,7 @@ export class Game {
   private readonly phone: PhoneInput;
   private readonly haptics = new HapticsDirector();
   private readonly hud: Hud;
+  private readonly lapTimer: LapTimer;
   private readonly pairing: PairingPanel;
 
   private constructor(
@@ -114,6 +119,7 @@ export class Game {
     this.phone.connect();
     this.input = new InputSystem([new KeyboardInput(), new GamepadInput(), this.phone]);
     this.hud = new Hud(hudRoot);
+    this.lapTimer = new LapTimer(track.spline.length, track.spec.race.startDistance, loadBestLap());
     this.pairing = new PairingPanel(hudRoot);
 
     this.placeOnTrack(track.spec.race.startDistance - GRID_OFFSET);
@@ -162,6 +168,7 @@ export class Game {
     this.velocity.set(v.x, v.y, v.z);
     this.impact = Math.max(this.impact, this.velocity.distanceTo(this.lastVelocity));
     this.lastVelocity.copy(this.velocity);
+    this.updateLap(dt);
     const ground = this.track.terrain.heightAt(this.currPosition.x, this.currPosition.z);
     if (this.currPosition.y < ground - FELL_THROUGH) this.resetToTrack();
   }
@@ -188,6 +195,7 @@ export class Game {
         inputSource: this.input.activeSource,
         paused: this.paused,
         pauseReason: this.pausedForController ? 'Controller disconnected' : '',
+        lap: this.lapTimer,
         inputDetail:
           this.input.activeSource === 'phone' && this.phone.status.rttMs !== null
             ? ` (${Math.round(this.phone.status.rttMs)} ms)`
@@ -195,6 +203,15 @@ export class Game {
       },
       frameDt,
     );
+  }
+
+  private updateLap(dt: number): void {
+    const near = this.track.spline.nearest(this.currPosition.x, this.currPosition.z, LAP_TRACK_RANGE);
+    const event = this.lapTimer.update(near?.distance ?? null, dt);
+    if (event?.kind !== 'lap') return;
+    // The lap just completed is one less than the lap now running.
+    this.hud.showLap(this.lapTimer.lap - 1, event.time, event.best);
+    if (event.best) saveBestLap(event.time);
   }
 
   private updateHaptics(dt: number): void {
@@ -237,6 +254,23 @@ export class Game {
     const r = this.vehicle.body.rotation();
     this.currPosition.set(t.x, t.y, t.z);
     this.currRotation.set(r.x, r.y, r.z, r.w);
+  }
+}
+
+function loadBestLap(): number | null {
+  try {
+    const value = Number(localStorage.getItem(BEST_LAP_KEY));
+    return value > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveBestLap(seconds: number): void {
+  try {
+    localStorage.setItem(BEST_LAP_KEY, String(seconds));
+  } catch {
+    // Private mode: the best lap just isn't remembered.
   }
 }
 
