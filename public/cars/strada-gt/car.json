@@ -67,21 +67,22 @@
     "redlineRpm": 7800,
     "launchRpm": 3200,
     "torqueCurve": [
-      [0, 220],
-      [1000, 260],
-      [2500, 360],
-      [4000, 430],
-      [5500, 450],
-      [6800, 420],
-      [7800, 360],
-      [8500, 300]
+      [0, 153],
+      [1000, 180],
+      [2500, 248],
+      [4000, 292],
+      [5500, 306],
+      [6800, 284],
+      [7800, 243],
+      [8500, 202]
     ],
-    "engineBraking": 70
+    "engineBraking": 70,
+    "throttleResponse": 0.25
   },
   "gearbox": {
-    "ratios": [3.2, 2.2, 1.65, 1.3, 1.06, 0.88],
+    "ratios": [2.6, 1.85, 1.42, 1.15, 0.99, 0.88],
     "reverse": 3.0,
-    "finalDrive": 3.6,
+    "finalDrive": 3.9,
     "efficiency": 0.88,
     "shiftTime": 0.18,
     "upshiftAt": 0.93,
@@ -96,7 +97,7 @@
     "handbrakeTorque": 3000
   },
   "aero": {
-    "dragArea": 0.88,
+    "dragArea": 0.72,
     "downforceArea": 3
   },
   "assists": {

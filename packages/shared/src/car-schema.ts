@@ -91,6 +91,8 @@ export const carSpecSchema = z.object({
     torqueCurve: z.array(z.tuple([nonNegative, nonNegative])).min(2),
     /** Engine braking torque at redline with the throttle closed, N·m. */
     engineBraking: nonNegative,
+    /** Seconds for delivered torque to build from closed to full throttle (0 = instant). */
+    throttleResponse: nonNegative.default(0),
   }),
   gearbox: z.object({
     /** Forward gear ratios, first gear first. */

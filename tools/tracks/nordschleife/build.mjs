@@ -104,7 +104,7 @@ writeTrack(OUT, {
     hillScale: 700,
     mountains: { startOffset: 200, outerRadius: 9000, peakHeight: 500 },
   },
-  forest: { seed: 21, density: 55, clearance: 6, meadowAmount: 0.9, broadleaf: 0.35 },
+  forest: { seed: 21, density: 28, clearance: 6, meadowAmount: 0.9, broadleaf: 0.35 },
   environment: { fogNear: 400, fogFar: 6500 },
 });
 

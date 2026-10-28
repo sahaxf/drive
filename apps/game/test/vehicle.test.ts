@@ -19,7 +19,7 @@ function setup(overrides?: (s: CarSpec) => void) {
   overrides?.(s);
   const world = createWorld();
   addStaticBoxes(world, [
-    { position: [0, -0.5, 0], halfExtents: [3000, 0.5, 3000], friction: 0.9 },
+    { position: [0, -0.5, 0], halfExtents: [5000, 0.5, 5000], friction: 0.9 },
   ]);
   const car = new Vehicle(world, s, new Vector3(0, 0.6, 0));
   const run = (seconds: number, input: Partial<InputState>) => {
@@ -55,28 +55,42 @@ describe('Vehicle', () => {
     expect(upright(car)).toBeGreaterThan(0.999);
   });
 
-  it('accelerates hard and shifts up', () => {
+  it('reaches 100 km/h in about 6 s and shifts up', () => {
     const { car, run } = setup();
     run(1, {});
-    run(4, { throttle: 1 });
-    const kmh4 = car.telemetry.forwardSpeed * 3.6;
+    // One physics step at a time so the timing is exact.
+    let time = 0;
+    while (car.telemetry.forwardSpeed < 100 / 3.6 && time < 15) {
+      run(PHYSICS_DT, { throttle: 1 });
+      time += PHYSICS_DT;
+    }
+    // A warm sports car (~200 kW, 1350 kg), not a supercar.
+    expect(time).toBeGreaterThan(5.2);
+    expect(time).toBeLessThan(6.8);
     run(6, { throttle: 1 });
-    const kmh10 = car.telemetry.forwardSpeed * 3.6;
-    // 0-100 in roughly 4-5 s for a 330 kW-ish GT car.
-    expect(kmh4).toBeGreaterThan(80);
-    expect(kmh4).toBeLessThan(140);
-    expect(kmh10).toBeGreaterThan(170);
     expect(car.telemetry.gear).toBeGreaterThanOrEqual(3);
     expect(upright(car)).toBeGreaterThan(0.98);
     expect(Math.abs(car.body.translation().x)).toBeLessThan(1.5);
   });
 
+  it('builds torque over a moment instead of snapping to full on the first frame', () => {
+    const { car, run } = setup();
+    run(1, {});
+    run(0.05, { throttle: 1 });
+    const early = car.telemetry.forwardSpeed / 0.05;
+    const v = car.telemetry.forwardSpeed;
+    run(0.45, { throttle: 1 });
+    run(0.05, { throttle: 1 });
+    const later = (car.telemetry.forwardSpeed - v) / 0.55;
+    expect(early).toBeLessThan(later * 0.5);
+  });
+
   it('tops out at a plausible speed', () => {
     const { car, run } = setup();
-    run(60, { throttle: 1 });
+    run(70, { throttle: 1 });
     const kmh = car.telemetry.forwardSpeed * 3.6;
-    expect(kmh).toBeGreaterThan(260);
-    expect(kmh).toBeLessThan(340);
+    expect(kmh).toBeGreaterThan(215);
+    expect(kmh).toBeLessThan(250);
   });
 
   it('brakes from 100 km/h in a realistic distance', () => {
@@ -120,8 +134,8 @@ describe('Vehicle', () => {
   it('spins the rear wheels on launch without traction control', () => {
     const { car, run } = setup((s) => {
       s.assists.tractionControl = false;
-      // The stock tyres out-grip the engine; on road-car grip the rears can still be lit up.
-      s.tyres.rear.grip = 1.1;
+      // The stock tyres out-grip the engine; on a wet road the rears can still be lit up.
+      s.tyres.rear.grip = 0.8;
     });
     run(1, {});
     let spun = false;

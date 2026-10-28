@@ -183,10 +183,11 @@ Headless measurements show the assist helps cornering at every speed, rather tha
 
 ## 7. Engine, gearbox, drivetrain (`drivetrain.ts`)
 
-- **Engine:** torque comes from linear interpolation of `torqueCurve` (rpm → N·m) × throttle.
+- **Engine:** torque comes from linear interpolation of `torqueCurve` (rpm → N·m) × delivered throttle.
+  - **Throttle response:** delivered throttle follows the pedal at up to `1 / throttleResponse` per second going up, and twice that coming off. Torque builds over about a quarter of a second instead of arriving in full on the first frame. This also smooths the keyboard's on/off throttle.
   - The **rev limiter** cuts torque at `redlineRpm` and restores it 250 rpm below.
   - With the throttle closed above idle, **engine braking** = `engineBraking × rpm/redline`.
-- **Clutch / launch:** engine rpm = max(wheel rpm, `idle + throttle × (launchRpm − idle)`), so the engine revs to `launchRpm` while the clutch slips at low speed.
+- **Clutch / launch:** engine rpm = max(wheel rpm, `idle + delivered throttle × (launchRpm − idle)`), so the engine revs to `launchRpm` while the clutch slips at low speed.
 - **Automatic gearbox:**
   - Upshifts above `upshiftAt × redline`.
   - Downshifts below `downshiftAt × redline`, but only if the lower gear won't immediately want to shift back up.
@@ -198,10 +199,11 @@ Headless measurements show the assist helps cornering at every speed, rather tha
 | Field | Value |
 |---|---|
 | `engine.idleRpm` / `redlineRpm` / `launchRpm` | 900 / 7800 / 3200 |
-| `engine.torqueCurve` | 220 @0 · 260 @1000 · 360 @2500 · 430 @4000 · **450 @5500** · 420 @6800 · 360 @7800 · 300 @8500 (N·m) |
+| `engine.torqueCurve` | 153 @0 · 180 @1000 · 248 @2500 · 292 @4000 · **306 @5500** · 284 @6800 · 243 @7800 · 202 @8500 (N·m), about 200 kW peak |
 | `engine.engineBraking` | 70 N·m at redline |
-| `gearbox.ratios` | 3.2, 2.2, 1.65, 1.3, 1.06, 0.88 (6 speed) |
-| `gearbox.reverse` / `finalDrive` / `efficiency` | 3.0 / 3.6 / 0.88 |
+| `engine.throttleResponse` | 0.25 s (closed to full) |
+| `gearbox.ratios` | 2.6, 1.85, 1.42, 1.15, 0.99, 0.88 (6 speed) |
+| `gearbox.reverse` / `finalDrive` / `efficiency` | 3.0 / 3.9 / 0.88 |
 | `gearbox.shiftTime` / `upshiftAt` / `downshiftAt` | 0.18 s / 0.93 / 0.5 |
 | `drivetrain.layout` | RWD |
 | `brakes.maxTorque` / `frontBias` / `handbrakeTorque` | 9000 N·m total / 0.64 / 3000 N·m (rear only) |
@@ -217,7 +219,7 @@ downforce = ½ ρ downforceArea × forwardSpeed²   (along −up, at the centre 
 
 | Field | Value | Effect |
 |---|---|---|
-| `aero.dragArea` | 0.88 m² | Sets top speed (~244 km/h). |
+| `aero.dragArea` | 0.72 m² | Sets top speed (~230 km/h). A real sports car is about 0.65–0.7. |
 | `aero.downforceArea` | **3** | Grip that grows with speed: ≈ +3.2 kN (24% of weight) at 150 km/h, +5.7 kN (43%) at 200 km/h. Arcade level. Downforce costs no drag in this model; if you raise it, consider raising `dragArea` slightly too. |
 
 ---
@@ -306,6 +308,7 @@ Newest first. Keep the reason, so a change can be judged or undone later.
 
 | Date | Change | Why |
 |---|---|---|
+| 2026-10-29 | Torque −32% (peak 450 → **306 N·m**, ~300 → ~200 kW); **`throttleResponse` 0.25 s** added; ratios 3.2…0.88 → **2.6…0.88**, final drive 3.6 → **3.9**; drag 0.88 → **0.72**. Tests: 0–100 in 5.2–6.8 s, top speed 215–250 km/h, torque builds over the first moment, and the wheelspin test uses wet-road rear grip 0.8. | Initial acceleration was too fast: a 0.87 g kick from the first frame, 0–100 in 3.6 s (supercar pace). The target is a warm sports car: 0–100 in **5.9 s**, peaking at about 0.5 g. The shorter final drive puts top gear near peak power, and the old drag figure only existed to cap the stronger engine. |
 | 2026-10-27 | Tyre grip 1.35/1.42 → **1.7/1.78**; downforce 1.4 → **3**. Tests updated: braking range 18–32 m, wheelspin test uses road-car rear grip. | Still "not turning much" at speed. The track's tight corners (46–64 m radius) need ~100 km/h; this raises cornering to ~1.6 g at 100 km/h and ~2.2 g at 200 km/h (NFS-style rather than road car). |
 | 2026-10-27 | `minLockFactor` 0.18 → **0.3**, `highSpeed` 38 → **45**; drag 0.85 → **0.88** | At high speed full lock couldn't use all the tyre grip. Drag offsets the top-speed gain from extra downforce. |
 | 2026-10-27 | Grip 1.15/1.22 → 1.35/1.42; downforce 0.35 → 1.4; stability yaw cap includes downforce | Low cornering at speed (the car was at road-car ~1 g). |
@@ -331,7 +334,8 @@ These are headless runs on flat asphalt with the current `car.json` and all assi
 - At 30% steer the car still reaches about 1.6–1.7 g.
 - **Recovery:** after a hard turn at 100 km/h with the steering centred, the yaw rate is under 2°/s within 0.6 s.
 - **Braking 100 → 0 km/h:** 22.7 m.
-- **Top speed:** ≈ 244 km/h in 6th, limited by drag. Measured before the last grip change, which doesn't affect it.
+- **Acceleration:** 0–100 km/h in **5.9 s**, 0–200 in 23.4 s, 1 km from a standstill in 25.6 s. Peaks at about 0.5 g, building from 0.14 g in the first 0.1 s.
+- **Top speed:** ≈ **230 km/h** in 6th, limited by drag.
 
 **Track context (Eifel Ring, 4.5 km):** most corners have a tightest radius of 46–64 m, so they top out around 100–110 km/h even at this grip. The fast sections are a 110 m bend (~150 km/h) and 166–182 m bends (~180–200 km/h). Arriving much faster than that needs braking; no grip setting fixes it.
 

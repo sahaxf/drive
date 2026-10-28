@@ -27,10 +27,12 @@ export interface DrivetrainState {
   /** Time spent holding the pedal that requests a direction change. */
   directionTimer: number;
   limiterCut: boolean;
+  /** Throttle the engine is actually delivering: follows the pedal with a short lag. */
+  engineThrottle: number;
 }
 
 export function createDrivetrainState(spec: CarSpec): DrivetrainState {
-  return { gear: 1, rpm: spec.engine.idleRpm, shiftTimer: 0, directionTimer: 0, limiterCut: false };
+  return { gear: 1, rpm: spec.engine.idleRpm, shiftTimer: 0, directionTimer: 0, limiterCut: false, engineThrottle: 0 };
 }
 
 export interface DrivetrainInput {
@@ -84,8 +86,19 @@ export function updateDrivetrain(
   if (!reversing) autoShift(spec, state, wheelRpm);
   if (state.shiftTimer > 0) state.shiftTimer = Math.max(0, state.shiftTimer - dt);
 
+  // Torque builds over `throttleResponse` instead of snapping on; it drops twice as fast.
+  const response = engine.throttleResponse;
+  if (response > 0) {
+    const change = throttle - state.engineThrottle;
+    const limit = (dt / response) * (change > 0 ? 1 : 2);
+    state.engineThrottle += Math.max(-limit, Math.min(limit, change));
+  } else {
+    state.engineThrottle = throttle;
+  }
+  const delivered = state.engineThrottle;
+
   // Below launch rpm the clutch slips, letting the engine rev up while the wheels catch up.
-  const clutchRpm = engine.idleRpm + throttle * (engine.launchRpm - engine.idleRpm);
+  const clutchRpm = engine.idleRpm + delivered * (engine.launchRpm - engine.idleRpm);
   state.rpm = Math.min(Math.max(wheelRpm, clutchRpm), engine.redlineRpm * 1.02);
 
   if (state.rpm >= engine.redlineRpm) state.limiterCut = true;
@@ -93,9 +106,9 @@ export function updateDrivetrain(
 
   let engineTorque = 0;
   if (state.shiftTimer === 0) {
-    if (throttle > 0.02 && !state.limiterCut) {
-      engineTorque = sampleTorqueCurve(engine.torqueCurve, state.rpm) * throttle;
-    } else if (throttle <= 0.02 && wheelRpm > engine.idleRpm) {
+    if (delivered > 0.02 && !state.limiterCut) {
+      engineTorque = sampleTorqueCurve(engine.torqueCurve, state.rpm) * delivered;
+    } else if (delivered <= 0.02 && wheelRpm > engine.idleRpm) {
       engineTorque = -engine.engineBraking * (state.rpm / engine.redlineRpm);
     }
   }
