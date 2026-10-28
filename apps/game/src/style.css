@@ -408,3 +408,162 @@ body {
   margin: 0;
   color: var(--hud-dim);
 }
+
+.hud-paused .hud-label {
+  margin-top: 28px;
+  letter-spacing: 0.3em;
+}
+
+/* --- Home screen --- */
+
+.home {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 32px;
+  overflow-y: auto;
+  background: radial-gradient(ellipse at 50% 35%, #1a1f27 0%, #0b0d12 70%);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-title {
+  font-size: 34px;
+  font-weight: 200;
+  letter-spacing: 0.6em;
+  margin-right: -0.6em; /* letter-spacing trails: keep the word centred */
+}
+
+.home-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  color: var(--hud-dim);
+  margin-bottom: 18px;
+}
+
+.home-cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 28px;
+}
+
+.home-card {
+  width: 280px;
+  padding: 22px 22px 18px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--hud-line);
+  cursor: pointer;
+  opacity: 0.55;
+  transition:
+    opacity 0.15s,
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.home-card.selected {
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.home-map {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  margin-bottom: 18px;
+}
+
+.home-map path {
+  fill: none;
+  stroke: var(--hud-fg);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+
+.home-map circle {
+  fill: var(--hud-best);
+}
+
+.home-name {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  line-height: 1.4;
+  min-height: 2.8em;
+}
+
+.home-stats {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--hud-line);
+  font-size: 12px;
+}
+
+.home-stats dt {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  color: var(--hud-dim);
+}
+
+.home-stats dd {
+  margin: 0;
+  text-align: right;
+}
+
+.home-stats dd.best {
+  color: var(--hud-best);
+}
+
+.home-credits {
+  margin-top: 14px;
+  min-height: 2.6em;
+  font-size: 8px;
+  line-height: 1.6;
+  letter-spacing: 0.1em;
+  text-transform: none;
+  color: var(--hud-faint);
+}
+
+.home-hint {
+  margin-top: 22px;
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  color: var(--hud-faint);
+}
+
+.home-setting {
+  margin-top: 26px;
+  padding: 8px 16px;
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: inherit;
+  color: var(--hud-fg);
+  background: none;
+  border: 1px solid var(--hud-line);
+  cursor: pointer;
+}
+
+.home-setting-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  color: var(--hud-dim);
+  margin-right: 8px;
+}

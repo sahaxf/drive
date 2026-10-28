@@ -25,6 +25,8 @@ export const trackSpecSchema = z.object({
     name: z.string().min(1),
     author: z.string().default('unknown'),
     version: z.number().int().positive().default(1),
+    /** Data sources and licences to show with the track (required for e.g. OpenStreetMap data). */
+    credits: z.string().optional(),
   }),
   centreline: z.object({
     /** Default road width, m. */

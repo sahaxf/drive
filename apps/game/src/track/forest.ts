@@ -24,12 +24,12 @@ export interface ForestPlacement {
 /** Keep trees off slopes steeper than this (rise over run). */
 const MAX_SLOPE = 0.75;
 /** Chance of a lone tree standing in a meadow. */
-const MEADOW_TREES = 0.025;
+const MEADOW_TREES = 0.012;
 /** Leave the outermost strip of near terrain bare so no tree hangs over its edge. */
 const EDGE_MARGIN = 12;
 /** Distant trees continue this far beyond the near terrain, thinning out with distance. */
 const FAR_BAND = 1800;
-const FAR_DENSITY = 32;
+const FAR_DENSITY = 16;
 /** Trees give way to rock above this fraction of the mountains' peak height. */
 const TREELINE = 0.42;
 

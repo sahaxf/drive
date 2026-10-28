@@ -1,13 +1,15 @@
-import { BufferAttribute, BufferGeometry, Color, Mesh, MeshStandardMaterial } from 'three';
+import { BufferAttribute, BufferGeometry, Color, Group, Mesh, MeshStandardMaterial, Vector3 } from 'three';
 import type { GeneratedTrack } from '../../track/generateTrack';
 import { createNoise, smoothstep } from '../../track/noise';
-import type { WorldField } from '../../track/terrain';
+import type { TerrainGrid, WorldField } from '../../track/terrain';
 import { canopyTexture, groundDetailTexture } from '../textures';
 
 /** Metres per repeat of the ground detail texture. */
 const DETAIL_TILE = 7;
 /** Metres per repeat of the forest canopy texture on the far slopes. */
 const CANOPY_TILE = 45;
+/** Grid cells per side of each terrain tile (129² vertices fit 16-bit indices). */
+const TILE_CELLS = 128;
 /** Depth of the curtain hung around the near terrain's edge so no gap shows at the seam. */
 const SKIRT_DEPTH = 15;
 /** Rock takes over from forest between these fractions of the mountains' peak height. */
@@ -49,72 +51,148 @@ function groundColour(
   return out.multiplyScalar(0.92 + n * 0.08);
 }
 
-export function buildTerrainView(track: GeneratedTrack, anisotropy: number): Mesh {
+export function buildTerrainView(track: GeneratedTrack, anisotropy: number): Group {
   const t = track.terrain;
-  const { nx, nz, resolution: res } = t;
-  const gridCount = nx * nz;
-  const perimeter = perimeterIndices(nx, nz);
-  const vertexCount = gridCount + perimeter.length;
-
-  const positions = new Float32Array(vertexCount * 3);
-  const uvs = new Float32Array(vertexCount * 2);
+  const { nx, nz } = t;
+  const normals = gridNormals(t);
+  const colours = new Float32Array(nx * nz * 3);
+  const variation = createNoise(track.spec.terrain.seed + 7).fbm;
+  const colour = new Color();
   for (let zi = 0; zi < nz; zi++) {
     for (let xi = 0; xi < nx; xi++) {
       const c = zi * nx + xi;
-      const x = t.originX + xi * res;
-      const z = t.originZ + zi * res;
-      positions.set([x, t.heights[c]!, z], c * 3);
-      uvs.set([x / DETAIL_TILE, z / DETAIL_TILE], c * 2);
+      const x = t.originX + xi * t.resolution;
+      const z = t.originZ + zi * t.resolution;
+      groundColour(colour, track.field, variation, x, z, normals[c * 3 + 1]!, t.roadDistance[c]!, false);
+      colour.toArray(colours, c * 3);
     }
   }
 
-  const indices: number[] = [];
-  for (let zi = 0; zi < nz - 1; zi++) {
-    for (let xi = 0; xi < nx - 1; xi++) {
-      const a = zi * nx + xi;
-      const b = a + nx;
+  const material = new MeshStandardMaterial({ vertexColors: true, map: groundDetailTexture(anisotropy), roughness: 1 });
+  const group = new Group();
+  group.name = 'terrain';
+  // Square tiles rather than one big mesh, so the camera only draws the ones in view.
+  for (let z0 = 0; z0 < nz - 1; z0 += TILE_CELLS) {
+    for (let x0 = 0; x0 < nx - 1; x0 += TILE_CELLS) {
+      const tile = new Mesh(
+        tileGeometry(t, normals, colours, x0, z0, Math.min(x0 + TILE_CELLS, nx - 1), Math.min(z0 + TILE_CELLS, nz - 1)),
+        material,
+      );
+      tile.receiveShadow = true;
+      group.add(tile);
+    }
+  }
+  const skirt = new Mesh(skirtGeometry(t, normals, colours), material);
+  skirt.receiveShadow = true;
+  group.add(skirt);
+  return group;
+}
+
+/** Per-vertex normals of the height grid by central differences: identical across tile seams. */
+function gridNormals(t: TerrainGrid): Float32Array {
+  const { nx, nz, heights, resolution: res } = t;
+  const out = new Float32Array(nx * nz * 3);
+  const v = new Vector3();
+  for (let zi = 0; zi < nz; zi++) {
+    for (let xi = 0; xi < nx; xi++) {
+      const xa = Math.max(xi - 1, 0);
+      const xb = Math.min(xi + 1, nx - 1);
+      const za = Math.max(zi - 1, 0);
+      const zb = Math.min(zi + 1, nz - 1);
+      const dx = (heights[zi * nx + xb]! - heights[zi * nx + xa]!) / ((xb - xa) * res);
+      const dz = (heights[zb * nx + xi]! - heights[za * nx + xi]!) / ((zb - za) * res);
+      v.set(-dx, 1, -dz).normalize().toArray(out, (zi * nx + xi) * 3);
+    }
+  }
+  return out;
+}
+
+/** Grid vertices [x0, x1] × [z0, z1] as one mesh. */
+function tileGeometry(
+  t: TerrainGrid,
+  normals: Float32Array,
+  colours: Float32Array,
+  x0: number,
+  z0: number,
+  x1: number,
+  z1: number,
+): BufferGeometry {
+  const w = x1 - x0 + 1;
+  const h = z1 - z0 + 1;
+  const positions = new Float32Array(w * h * 3);
+  const tileNormals = new Float32Array(w * h * 3);
+  const tileColours = new Float32Array(w * h * 3);
+  const uvs = new Float32Array(w * h * 2);
+  for (let zi = z0; zi <= z1; zi++) {
+    for (let xi = x0; xi <= x1; xi++) {
+      const c = zi * t.nx + xi;
+      const v = (zi - z0) * w + (xi - x0);
+      const x = t.originX + xi * t.resolution;
+      const z = t.originZ + zi * t.resolution;
+      positions.set([x, t.heights[c]!, z], v * 3);
+      uvs.set([x / DETAIL_TILE, z / DETAIL_TILE], v * 2);
+      tileNormals.set(normals.subarray(c * 3, c * 3 + 3), v * 3);
+      tileColours.set(colours.subarray(c * 3, c * 3 + 3), v * 3);
+    }
+  }
+  const indices = new Uint16Array((w - 1) * (h - 1) * 6);
+  let i = 0;
+  for (let zi = 0; zi < h - 1; zi++) {
+    for (let xi = 0; xi < w - 1; xi++) {
+      const a = zi * w + xi;
+      const b = a + w;
       // Normal up for +x right, +z down the grid.
-      indices.push(a, b, a + 1, a + 1, b, b + 1);
+      indices.set([a, b, a + 1, a + 1, b, b + 1], i);
+      i += 6;
     }
   }
-
-  // Skirt: a copy of each edge vertex dropped straight down, stitched to the edge.
-  perimeter.forEach((c, i) => {
-    const s = gridCount + i;
-    positions.set([positions[c * 3]!, positions[c * 3 + 1]! - SKIRT_DEPTH, positions[c * 3 + 2]!], s * 3);
-    uvs.set([uvs[c * 2]!, uvs[c * 2 + 1]!], s * 2);
-    const nextC = perimeter[(i + 1) % perimeter.length]!;
-    const nextS = gridCount + ((i + 1) % perimeter.length);
-    // Both windings: the skirt is only ever seen edge-on, and this avoids caring about facing.
-    indices.push(c, s, nextC, nextC, s, nextS, c, nextC, s, nextC, nextS, s);
-  });
-
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new BufferAttribute(positions, 3));
+  geometry.setAttribute('normal', new BufferAttribute(tileNormals, 3));
+  geometry.setAttribute('color', new BufferAttribute(tileColours, 3));
+  geometry.setAttribute('uv', new BufferAttribute(uvs, 2));
+  geometry.setIndex(new BufferAttribute(indices, 1));
+  return geometry;
+}
+
+/**
+ * A curtain hung from the grid's outer edge, so no gap shows at the seam with the far
+ * landscape. Lit and coloured like the ground above it.
+ */
+function skirtGeometry(t: TerrainGrid, normals: Float32Array, colours: Float32Array): BufferGeometry {
+  const perimeter = perimeterIndices(t.nx, t.nz);
+  const count = perimeter.length;
+  const positions = new Float32Array(count * 2 * 3);
+  const skirtNormals = new Float32Array(count * 2 * 3);
+  const skirtColours = new Float32Array(count * 2 * 3);
+  const uvs = new Float32Array(count * 2 * 2);
+  perimeter.forEach((c, i) => {
+    const x = t.originX + (c % t.nx) * t.resolution;
+    const z = t.originZ + Math.floor(c / t.nx) * t.resolution;
+    const y = t.heights[c]!;
+    positions.set([x, y, z, x, y - SKIRT_DEPTH, z], i * 6);
+    for (const v of [i * 2, i * 2 + 1]) {
+      skirtNormals.set(normals.subarray(c * 3, c * 3 + 3), v * 3);
+      skirtColours.set(colours.subarray(c * 3, c * 3 + 3), v * 3);
+      uvs.set([x / DETAIL_TILE, z / DETAIL_TILE], v * 2);
+    }
+  });
+  const indices: number[] = [];
+  for (let i = 0; i < count; i++) {
+    const top = i * 2;
+    const bottom = top + 1;
+    const nextTop = ((i + 1) % count) * 2;
+    const nextBottom = nextTop + 1;
+    // Both windings: the skirt is only ever seen edge-on, and this avoids caring about facing.
+    indices.push(top, bottom, nextTop, nextTop, bottom, nextBottom, top, nextTop, bottom, nextTop, nextBottom, bottom);
+  }
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new BufferAttribute(positions, 3));
+  geometry.setAttribute('normal', new BufferAttribute(skirtNormals, 3));
+  geometry.setAttribute('color', new BufferAttribute(skirtColours, 3));
   geometry.setAttribute('uv', new BufferAttribute(uvs, 2));
   geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-
-  const normals = geometry.getAttribute('normal');
-  // The skirt's opposing windings cancel its normals out; light it like the ground above.
-  perimeter.forEach((c, i) => normals.setXYZ(gridCount + i, normals.getX(c), normals.getY(c), normals.getZ(c)));
-  const colours = new Float32Array(vertexCount * 3);
-  const variation = createNoise(track.spec.terrain.seed + 7).fbm;
-  const colour = new Color();
-  for (let c = 0; c < gridCount; c++) {
-    groundColour(colour, track.field, variation, positions[c * 3]!, positions[c * 3 + 2]!, normals.getY(c), t.roadDistance[c]!, false);
-    colour.toArray(colours, c * 3);
-  }
-  perimeter.forEach((c, i) => colours.copyWithin((gridCount + i) * 3, c * 3, c * 3 + 3));
-  geometry.setAttribute('color', new BufferAttribute(colours, 3));
-
-  const mesh = new Mesh(
-    geometry,
-    new MeshStandardMaterial({ vertexColors: true, map: groundDetailTexture(anisotropy), roughness: 1 }),
-  );
-  mesh.name = 'terrain';
-  mesh.receiveShadow = true;
-  return mesh;
+  return geometry;
 }
 
 /** Grid indices around the edge of an nx × nz grid, in order. */

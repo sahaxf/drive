@@ -16,8 +16,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { SPECIES_COUNT, Species, TREE_STRIDE } from '../../track/forest';
 import type { GeneratedTrack } from '../../track/generateTrack';
 
-/** Trees are split into square tiles so off-screen tiles are culled as a whole. */
-const TILE_SIZE = 250;
+/** Trees are split into square tiles so off-screen tiles are culled as a whole. Bigger tiles = fewer draw calls. */
+const TILE_SIZE = 500;
 
 const TRUNK = '#4b3a2a';
 const SPRUCE = '#2c4724';

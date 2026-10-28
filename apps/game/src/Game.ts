@@ -1,6 +1,6 @@
 import type { World } from '@dimforge/rapier3d-compat';
 import { Quaternion, Vector3 } from 'three';
-import { parseCarSpec, parseTrackSpec, type CarSpec, type TrackSpec } from '@drivee/shared';
+import type { CarSpec } from '@drivee/shared';
 import { CameraRig } from './camera/CameraRig';
 import { GameLoop } from './core/GameLoop';
 import { GamepadInput } from './input/GamepadInput';
@@ -20,15 +20,15 @@ import {
   type GeneratedTrack,
   type GenerationStep,
 } from './track/generateTrack';
+import { loadSettings, nextShadowQuality, saveSettings } from './settings';
+import { loadBestLap, loadCarSpec, loadTrackSpec, saveBestLap } from './tracks';
 import { Hud } from './ui/Hud';
 import { PairingPanel } from './ui/PairingPanel';
 import { Vehicle } from './vehicle/Vehicle';
 
 const CAR_ID = 'strada-gt';
-const TRACK_ID = 'eifel-ring';
 /** Further than this from the centreline, lap progress isn't tracked (the clock still runs). */
 const LAP_TRACK_RANGE = 40;
-const BEST_LAP_KEY = `drivee.bestLap.${TRACK_ID}`;
 /** Height above the road surface the car is dropped from on spawn/reset. */
 const SPAWN_LIFT = 0.7;
 /** Grid slot: metres behind the start line. */
@@ -65,9 +65,10 @@ export class Game {
   static async create(
     viewport: HTMLElement,
     hudRoot: HTMLElement,
+    trackId: string,
     onProgress: (label: string) => void = () => {},
   ): Promise<Game> {
-    const [, car, trackSpec] = await Promise.all([initPhysics(), loadCar(CAR_ID), loadTrack(TRACK_ID)]);
+    const [, car, trackSpec] = await Promise.all([initPhysics(), loadCarSpec(CAR_ID), loadTrackSpec(trackId)]);
     const t0 = performance.now();
     const track = await generateTrack(trackSpec, async (step) => {
       onProgress(STEP_LABELS[step]);
@@ -94,6 +95,7 @@ export class Game {
   private readonly phone: PhoneInput;
   private readonly haptics = new HapticsDirector();
   private readonly hud: Hud;
+  private readonly settings = loadSettings();
   private readonly lapTimer: LapTimer;
   private readonly pairing: PairingPanel;
 
@@ -107,7 +109,7 @@ export class Game {
     this.vehicle = new Vehicle(this.world, spec, new Vector3());
     this.vehicle.surfaceGrip = addTrackPhysics(this.world, track);
 
-    this.renderer = new Renderer(viewport);
+    this.renderer = new Renderer(viewport, this.settings.shadows);
     const env = track.spec.environment;
     this.renderer.setFog(env.fogNear, env.fogFar);
     this.renderer.scene.add(buildTrackScene(track, this.renderer.maxAnisotropy));
@@ -119,7 +121,17 @@ export class Game {
     this.phone.connect();
     this.input = new InputSystem([new KeyboardInput(), new GamepadInput(), this.phone]);
     this.hud = new Hud(hudRoot);
-    this.lapTimer = new LapTimer(track.spline.length, track.spec.race.startDistance, loadBestLap());
+    // Back to the home screen, only from the pause screen so it can't happen by accident.
+    window.addEventListener('keydown', (e) => {
+      if (!this.paused || e.repeat) return;
+      if (e.code === 'KeyQ') location.href = location.pathname;
+      if (e.code === 'KeyG') {
+        this.settings.shadows = nextShadowQuality(this.settings.shadows);
+        this.renderer.setShadowQuality(this.settings.shadows);
+        saveSettings(this.settings);
+      }
+    });
+    this.lapTimer = new LapTimer(track.spline.length, track.spec.race.startDistance, loadBestLap(track.spec.meta.id));
     this.pairing = new PairingPanel(hudRoot);
 
     this.placeOnTrack(track.spec.race.startDistance - GRID_OFFSET);
@@ -195,6 +207,7 @@ export class Game {
         inputSource: this.input.activeSource,
         paused: this.paused,
         pauseReason: this.pausedForController ? 'Controller disconnected' : '',
+        shadows: this.settings.shadows,
         lap: this.lapTimer,
         inputDetail:
           this.input.activeSource === 'phone' && this.phone.status.rttMs !== null
@@ -211,7 +224,7 @@ export class Game {
     if (event?.kind !== 'lap') return;
     // The lap just completed is one less than the lap now running.
     this.hud.showLap(this.lapTimer.lap - 1, event.time, event.best);
-    if (event.best) saveBestLap(event.time);
+    if (event.best) saveBestLap(this.track.spec.meta.id, event.time);
   }
 
   private updateHaptics(dt: number): void {
@@ -257,37 +270,6 @@ export class Game {
   }
 }
 
-function loadBestLap(): number | null {
-  try {
-    const value = Number(localStorage.getItem(BEST_LAP_KEY));
-    return value > 0 ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveBestLap(seconds: number): void {
-  try {
-    localStorage.setItem(BEST_LAP_KEY, String(seconds));
-  } catch {
-    // Private mode: the best lap just isn't remembered.
-  }
-}
-
 function nextFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
-}
-
-async function loadJson(url: string, what: string): Promise<unknown> {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Could not load ${what} (${response.status})`);
-  return response.json();
-}
-
-async function loadCar(id: string): Promise<CarSpec> {
-  return parseCarSpec(await loadJson(`/cars/${id}/car.json`, `car "${id}"`));
-}
-
-async function loadTrack(id: string): Promise<TrackSpec> {
-  return parseTrackSpec(await loadJson(`/tracks/${id}/track.json`, `track "${id}"`));
 }

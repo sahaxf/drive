@@ -19,6 +19,8 @@ export interface HudState {
   paused: boolean;
   /** Shown under PAUSED, e.g. why the game paused itself. */
   pauseReason: string;
+  /** Shadow quality, shown and changed (G) on the pause screen. */
+  shadows: string;
   /** Extra input detail for the info line (phone round trip). */
   inputDetail: string;
   lap: LapState;
@@ -47,6 +49,7 @@ export class Hud {
   private readonly help: HTMLElement;
   private readonly paused: HTMLElement;
   private readonly reason: HTMLElement;
+  private readonly shadows: HTMLElement;
   private fps = 60;
 
   constructor(root: HTMLElement) {
@@ -73,10 +76,11 @@ export class Hud {
         <b>A D / ← →</b><span>Steer</span>
         <b>Space</b><span>Handbrake</span>
         <b>C · R · P</b><span>Camera · reset · pause</span>
+        <b>P then Q</b><span>Back to track selection</span>
         <b>T · B</b><span>Traction control · ABS</span>
       </div>
       <div class="hud-info" data-el="info"></div>
-      <div class="hud-paused" data-el="paused">Paused<small data-el="reason"></small></div>
+      <div class="hud-paused" data-el="paused">Paused<small data-el="reason"></small><span class="hud-label">P Resume · G Shadows: <span data-el="shadows"></span> · Q Menu</span></div>
     `;
     const el = (name: string) => root.querySelector<HTMLElement>(`[data-el="${name}"]`)!;
     this.speed = el('speed');
@@ -95,6 +99,7 @@ export class Hud {
     this.help = el('help');
     this.paused = el('paused');
     this.reason = el('reason');
+    this.shadows = el('shadows');
 
     // A UI-only key, so it lives here rather than in the game's input bindings.
     window.addEventListener('keydown', (e) => {
@@ -123,6 +128,7 @@ export class Hud {
     this.info.textContent = `${Math.round(this.fps)} fps · ${state.camera} cam · ${state.inputSource}${state.inputDetail} · H controls`;
     this.paused.style.display = state.paused ? 'flex' : 'none';
     this.reason.textContent = state.pauseReason;
+    this.shadows.textContent = state.shadows;
   }
 
   /** Brief notification when a lap is completed. */

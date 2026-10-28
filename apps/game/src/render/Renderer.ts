@@ -10,8 +10,10 @@ import {
   Scene,
   Vector3,
   WebGLRenderer,
+  type Material,
 } from 'three';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
+import { SHADOW_MAP_SIZE, type ShadowQuality } from '../settings';
 
 /**
  * Moody dusk: a low, dim sun just above the ridgeline, heavy cloud, cool blue-grey haze
@@ -45,17 +47,20 @@ export class Renderer {
   private readonly sunDirection = new Vector3();
   private sky!: Sky;
 
-  constructor(private readonly container: HTMLElement) {
+  constructor(
+    private readonly container: HTMLElement,
+    shadows: ShadowQuality = 'medium',
+  ) {
     this.webgl = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.webgl.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.webgl.toneMapping = ACESFilmicToneMapping;
     this.webgl.toneMappingExposure = LIGHTING.exposure;
-    this.webgl.shadowMap.enabled = true;
     this.webgl.shadowMap.type = PCFShadowMap;
     container.appendChild(this.webgl.domElement);
 
     this.setupSky();
     this.setupLights();
+    this.setShadowQuality(shadows);
     this.scene.fog = new Fog(LIGHTING.fogColour, 500, 7500);
 
     this.resize();
@@ -75,6 +80,26 @@ export class Renderer {
   setShadowFocus(target: Vector3): void {
     this.sun.position.copy(target).addScaledVector(this.sunDirection, 200);
     this.sun.target.position.copy(target);
+  }
+
+  /** Change shadow quality, including live while driving. */
+  setShadowQuality(quality: ShadowQuality): void {
+    const size = SHADOW_MAP_SIZE[quality];
+    const enabled = size > 0;
+    if (enabled !== this.webgl.shadowMap.enabled) {
+      this.webgl.shadowMap.enabled = enabled;
+      // Shadow receiving is compiled into each material's shader: rebuild them.
+      this.scene.traverse((o) => {
+        const material = (o as { material?: Material | Material[] }).material;
+        for (const m of Array.isArray(material) ? material : material ? [material] : []) m.needsUpdate = true;
+      });
+    }
+    if (enabled && this.sun.shadow.mapSize.x !== size) {
+      this.sun.shadow.mapSize.set(size, size);
+      // Three only allocates the map once; drop it so it's recreated at the new size.
+      this.sun.shadow.map?.dispose();
+      this.sun.shadow.map = null;
+    }
   }
 
   render(): void {
@@ -115,7 +140,6 @@ export class Renderer {
   private setupLights(): void {
     this.sun.castShadow = true;
     const shadow = this.sun.shadow;
-    shadow.mapSize.set(4096, 4096);
     shadow.camera.left = -SHADOW_EXTENT;
     shadow.camera.right = SHADOW_EXTENT;
     shadow.camera.top = SHADOW_EXTENT;

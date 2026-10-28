@@ -69,7 +69,7 @@
     "seed": 4242,
     "density": 160,
     "clearance": 5,
-    "meadowAmount": 0.25,
+    "meadowAmount": 0.82,
     "broadleaf": 0.2
   },
   "environment": {
