@@ -63,6 +63,8 @@ export interface VehicleTelemetry {
   gear: number;
   throttle: number;
   brake: number;
+  /** Engine load 0..1: delivered throttle, 0 during a shift. */
+  load: number;
   wheelspin: boolean;
   lockup: boolean;
 }
@@ -150,6 +152,7 @@ export class Vehicle {
       gear: 1,
       throttle: 0,
       brake: 0,
+      load: 0,
       wheelspin: false,
       lockup: false,
     };
@@ -213,6 +216,7 @@ export class Vehicle {
       gear: this.drivetrain.gear,
       throttle: out.throttle,
       brake: out.brake,
+      load: out.load,
       wheelspin,
       lockup,
     });

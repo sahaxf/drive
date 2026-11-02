@@ -2,7 +2,7 @@
   "id": "strada-gt",
   "name": "Strada GT",
   "visual": {
-    "paintColor": "#d01c1f"
+    "paintColor": "#7e858b"
   },
   "chassis": {
     "mass": 1350,
@@ -65,6 +65,7 @@
   "engine": {
     "idleRpm": 900,
     "redlineRpm": 7800,
+    "cylinders": 6,
     "launchRpm": 3200,
     "torqueCurve": [
       [0, 153],

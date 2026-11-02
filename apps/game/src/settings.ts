@@ -16,16 +16,18 @@ export const SHADOW_MAP_SIZE: Record<ShadowQuality, number> = {
 
 export interface Settings {
   shadows: ShadowQuality;
+  sound: boolean;
 }
 
 const KEY = 'drivee.settings';
-const DEFAULTS: Settings = { shadows: 'medium' };
+const DEFAULTS: Settings = { shadows: 'medium', sound: true };
 
 export function loadSettings(storage: Pick<Storage, 'getItem'> | null = safeStorage()): Settings {
   try {
     const saved = JSON.parse(storage?.getItem(KEY) ?? 'null') as Partial<Settings> | null;
     const shadows = SHADOW_QUALITIES.includes(saved?.shadows as ShadowQuality) ? saved!.shadows! : DEFAULTS.shadows;
-    return { shadows };
+    const sound = typeof saved?.sound === 'boolean' ? saved.sound : DEFAULTS.sound;
+    return { shadows, sound };
   } catch {
     return { ...DEFAULTS };
   }

@@ -85,6 +85,8 @@ export const carSpecSchema = z.object({
   engine: z.object({
     idleRpm: positive,
     redlineRpm: positive,
+    /** Sets the engine note: the exhaust pulses cylinders / 2 times per revolution. */
+    cylinders: z.number().int().positive().default(6),
     /** RPM the engine holds while the clutch slips during a launch. */
     launchRpm: positive,
     /** [rpm, torque N·m] pairs, ascending by rpm. */

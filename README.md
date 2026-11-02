@@ -24,7 +24,7 @@ npm run build
 | C | Camera (chase / hood) |
 | R | Reset car upright |
 | T / B | Toggle traction control / ABS |
-| P / Esc | Pause |
+| P / Esc | Pause (then G shadows, V engine sound, Q menu) |
 
 A standard gamepad also works (RT/LT pedals, left stick steers, A handbrake).
 

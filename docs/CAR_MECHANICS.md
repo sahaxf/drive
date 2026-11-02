@@ -195,10 +195,16 @@ Headless measurements show the assist helps cornering at every speed, rather tha
 - **Reverse:** holding the brake below 0.6 m/s for 0.35 s selects reverse. Holding the throttle selects first again. In reverse the pedals swap roles (brake drives).
 - **Wheel torque** = engine torque × gear ratio × final drive × `efficiency`, split equally between the driven wheels. AWD splits by `frontTorqueSplit`.
 - **Wheel speed** is clamped to the redline speed of the current gear.
+- **Sound** (`audio/EngineSound.ts`): synthesized with Web Audio, no samples.
+  - Pitch is the exhaust pulse rate, `rpm / 60 × cylinders / 2` (6 cylinders: 45 Hz at idle, 390 Hz at redline). A tone at half that rate modulates it, which gives the burble.
+  - Load (delivered throttle, 0 during a shift) makes the note louder, more distorted and brighter, and adds intake noise. Lifting off leaves a quieter, duller overrun note.
+  - At the limiter the note stutters about 16 times a second.
+  - Toggle with V on the pause screen (saved). It fades out while paused.
 
 | Field | Value |
 |---|---|
 | `engine.idleRpm` / `redlineRpm` / `launchRpm` | 900 / 7800 / 3200 |
+| `engine.cylinders` | 6 (engine note only, default 6) |
 | `engine.torqueCurve` | 153 @0 · 180 @1000 · 248 @2500 · 292 @4000 · **306 @5500** · 284 @6800 · 243 @7800 · 202 @8500 (N·m), about 200 kW peak |
 | `engine.engineBraking` | 70 N·m at redline |
 | `engine.throttleResponse` | 0.25 s (closed to full) |
@@ -223,6 +229,16 @@ downforce = ½ ρ downforceArea × forwardSpeed²   (along −up, at the centre 
 | `aero.downforceArea` | **3** | Grip that grows with speed: ≈ +3.2 kN (24% of weight) at 150 km/h, +5.7 kN (43%) at 200 km/h. Arcade level. Downforce costs no drag in this model; if you raise it, consider raising `dragArea` slightly too. |
 
 ---
+
+### 8.1 Car visuals (`render/car/`)
+
+The car is drawn in code, not loaded from a model: an original premium coupe, sized from this file so it always matches the physics.
+
+- **Body and cabin** are *lofts* (`loft.ts`): keyframe cross-sections along the car (width, bottom, top, how boxy, how far the sides lean in), interpolated and stitched into one smooth mesh. The design keyframes are in `coupe.ts`, written relative to `chassis.halfExtents`, the axles and the resting ground line.
+- **Wheel wells** are cut by raising the outer part of each ring around the axles; the floor between them is left alone. Over the wheels the body is 4% wider than the collision box so the tyres sit flush.
+- **Two-tone areas** (grille, sills, wells, windows, roof) are assigned per face. Edges along a ring or along a constant angle come out clean; anything else steps at mesh resolution, so new areas should follow those lines.
+- **Wheels** (`wheel.ts`): a lathed tyre, a five-twin-spoke rim with the brake disc behind it, and a caliper that steers but doesn't spin.
+- **Preview:** `npm run dev`, then open `/car.html` (dev only): a turntable you can drag. `?view=three|front|side|rear|rearThree|top|wheel` fixes the camera for screenshots.
 
 ## 9. Input pipeline
 

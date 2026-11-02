@@ -21,6 +21,8 @@ export interface HudState {
   pauseReason: string;
   /** Shadow quality, shown and changed (G) on the pause screen. */
   shadows: string;
+  /** Engine sound on or off, changed (V) on the pause screen. */
+  sound: boolean;
   /** Extra input detail for the info line (phone round trip). */
   inputDetail: string;
   lap: LapState;
@@ -50,6 +52,7 @@ export class Hud {
   private readonly paused: HTMLElement;
   private readonly reason: HTMLElement;
   private readonly shadows: HTMLElement;
+  private readonly sound: HTMLElement;
   private fps = 60;
 
   constructor(root: HTMLElement) {
@@ -80,7 +83,7 @@ export class Hud {
         <b>T · B</b><span>Traction control · ABS</span>
       </div>
       <div class="hud-info" data-el="info"></div>
-      <div class="hud-paused" data-el="paused">Paused<small data-el="reason"></small><span class="hud-label">P Resume · G Shadows: <span data-el="shadows"></span> · Q Menu</span></div>
+      <div class="hud-paused" data-el="paused">Paused<small data-el="reason"></small><span class="hud-label">P Resume · G Shadows: <span data-el="shadows"></span> · V Sound: <span data-el="sound"></span> · Q Menu</span></div>
     `;
     const el = (name: string) => root.querySelector<HTMLElement>(`[data-el="${name}"]`)!;
     this.speed = el('speed');
@@ -100,6 +103,7 @@ export class Hud {
     this.paused = el('paused');
     this.reason = el('reason');
     this.shadows = el('shadows');
+    this.sound = el('sound');
 
     // A UI-only key, so it lives here rather than in the game's input bindings.
     window.addEventListener('keydown', (e) => {
@@ -129,6 +133,7 @@ export class Hud {
     this.paused.style.display = state.paused ? 'flex' : 'none';
     this.reason.textContent = state.pauseReason;
     this.shadows.textContent = state.shadows;
+    this.sound.textContent = state.sound ? 'on' : 'off';
   }
 
   /** Brief notification when a lap is completed. */

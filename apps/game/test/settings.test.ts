@@ -18,8 +18,15 @@ describe('settings', () => {
 
   it('round-trips through storage', () => {
     const storage = memoryStorage();
-    saveSettings({ shadows: 'none' }, storage);
-    expect(loadSettings(storage).shadows).toBe('none');
+    saveSettings({ shadows: 'none', sound: false }, storage);
+    expect(loadSettings(storage)).toEqual({ shadows: 'none', sound: false });
+  });
+
+  it('has sound on unless it was turned off', () => {
+    expect(loadSettings(memoryStorage()).sound).toBe(true);
+    const storage = memoryStorage();
+    storage.setItem('drivee.settings', '{"shadows":"low","sound":"loud"}');
+    expect(loadSettings(storage).sound).toBe(true);
   });
 
   it('cycles none → low → medium → high → none', () => {

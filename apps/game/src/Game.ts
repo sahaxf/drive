@@ -1,6 +1,7 @@
 import type { World } from '@dimforge/rapier3d-compat';
 import { Quaternion, Vector3 } from 'three';
 import type { CarSpec } from '@drivee/shared';
+import { EngineSound } from './audio/EngineSound';
 import { CameraRig } from './camera/CameraRig';
 import { GameLoop } from './core/GameLoop';
 import { GamepadInput } from './input/GamepadInput';
@@ -98,6 +99,7 @@ export class Game {
   private readonly settings = loadSettings();
   private readonly lapTimer: LapTimer;
   private readonly pairing: PairingPanel;
+  private readonly engineSound: EngineSound | null;
 
   private constructor(
     viewport: HTMLElement,
@@ -130,9 +132,14 @@ export class Game {
         this.renderer.setShadowQuality(this.settings.shadows);
         saveSettings(this.settings);
       }
+      if (e.code === 'KeyV') {
+        this.settings.sound = !this.settings.sound;
+        saveSettings(this.settings);
+      }
     });
     this.lapTimer = new LapTimer(track.spline.length, track.spec.race.startDistance, loadBestLap(track.spec.meta.id));
     this.pairing = new PairingPanel(hudRoot);
+    this.engineSound = EngineSound.create(spec.engine);
 
     this.placeOnTrack(track.spec.race.startDistance - GRID_OFFSET);
     this.loop = new GameLoop(
@@ -195,6 +202,11 @@ export class Game {
     this.renderer.setShadowFocus(this.renderPosition);
     this.renderer.render();
     this.updateHaptics(frameDt);
+    this.engineSound?.update(
+      { rpm: t.rpm, load: t.load, atLimiter: this.atLimiter() },
+      frameDt,
+      this.settings.sound && !this.paused,
+    );
     this.pairing.update(this.phone.status);
 
     this.hud.update(
@@ -208,6 +220,7 @@ export class Game {
         paused: this.paused,
         pauseReason: this.pausedForController ? 'Controller disconnected' : '',
         shadows: this.settings.shadows,
+        sound: this.settings.sound,
         lap: this.lapTimer,
         inputDetail:
           this.input.activeSource === 'phone' && this.phone.status.rttMs !== null
@@ -234,12 +247,17 @@ export class Game {
         onKerb: this.vehicle.wheels.some((w) => w.grounded && w.surfaceGrip === SURFACE_GRIP.kerb),
         speed: t.speed,
         impact: this.paused ? 0 : this.impact,
-        atLimiter: t.throttle > 0.5 && t.rpm >= this.spec.engine.redlineRpm * 0.99,
+        atLimiter: this.atLimiter(),
       },
       dt,
     );
     this.impact = 0;
     if (pattern) this.phone.buzz(pattern);
+  }
+
+  private atLimiter(): boolean {
+    const t = this.vehicle.telemetry;
+    return t.throttle > 0.5 && t.rpm >= this.spec.engine.redlineRpm * 0.99;
   }
 
   /** Back onto the centreline at the nearest point, facing the racing direction. */

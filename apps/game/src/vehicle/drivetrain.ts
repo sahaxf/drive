@@ -50,6 +50,8 @@ export interface DrivetrainOutput {
   /** Pedals after reverse remapping (in reverse, the brake pedal drives). */
   throttle: number;
   brake: number;
+  /** How hard the engine is working, 0..1: delivered throttle, 0 while a shift cuts drive. */
+  load: number;
 }
 
 export function gearRatio(gearbox: GearboxSpec, gear: number): number {
@@ -115,7 +117,7 @@ export function updateDrivetrain(
 
   const direction = reversing ? -1 : 1;
   const wheelTorque = engineTorque * ratio * gearbox.efficiency * direction;
-  return { wheelTorque, throttle, brake };
+  return { wheelTorque, throttle, brake, load: state.shiftTimer > 0 ? 0 : delivered };
 }
 
 function updateDirection(state: DrivetrainState, input: DrivetrainInput, dt: number): void {
