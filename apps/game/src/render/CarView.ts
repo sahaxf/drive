@@ -1,14 +1,18 @@
 import {
   BoxGeometry,
+  type BufferGeometry,
   CylinderGeometry,
+  ExtrudeGeometry,
   Group,
   Mesh,
   MeshPhysicalMaterial,
   MeshStandardMaterial,
   type Object3D,
   type Quaternion,
+  Shape,
   type Vector3,
 } from 'three';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { CarSpec } from '@drivee/shared';
 import type { WheelId, WheelState } from '../vehicle/Vehicle';
@@ -51,20 +55,20 @@ export class CarView {
     const body = new Group();
     body.name = 'body';
     body.add(
-      shadowed(new Mesh(new RoundedBoxGeometry(hx * 2, 0.5, hz * 2, 4, 0.14), paint), 0, -0.06, 0),
-      shadowed(new Mesh(new RoundedBoxGeometry(hx * 1.6, 0.44, hz * 0.95, 4, 0.16), glass), 0, 0.38, -0.25),
+      shadowed(new Mesh(new RoundedBoxGeometry(hx * 2, 0.5, hz * 2, 6, 0.21), paint), 0, -0.06, 0),
+      shadowed(new Mesh(cabinGeometry(hx * 1.6), glass), 0, 0, 0),
       // Rear wing and its two posts.
-      shadowed(new Mesh(new BoxGeometry(hx * 1.85, 0.05, 0.36), trim), 0, 0.48, -hz + 0.2),
-      shadowed(new Mesh(new BoxGeometry(0.06, 0.28, 0.16), trim), 0.5, 0.32, -hz + 0.22),
-      shadowed(new Mesh(new BoxGeometry(0.06, 0.28, 0.16), trim), -0.5, 0.32, -hz + 0.22),
+      shadowed(new Mesh(new RoundedBoxGeometry(hx * 1.85, 0.05, 0.36, 2, 0.022), trim), 0, 0.48, -hz + 0.2),
+      shadowed(new Mesh(new RoundedBoxGeometry(0.06, 0.28, 0.16, 2, 0.025), trim), 0.5, 0.32, -hz + 0.22),
+      shadowed(new Mesh(new RoundedBoxGeometry(0.06, 0.28, 0.16, 2, 0.025), trim), -0.5, 0.32, -hz + 0.22),
       // Front splitter.
-      shadowed(new Mesh(new BoxGeometry(hx * 1.9, 0.04, 0.3), trim), 0, -0.3, hz - 0.1),
+      shadowed(new Mesh(new RoundedBoxGeometry(hx * 1.9, 0.04, 0.3, 2, 0.018), trim), 0, -0.3, hz - 0.1),
     );
     for (const side of [1, -1]) {
       body.add(
-        at(new Mesh(new BoxGeometry(0.36, 0.08, 0.04), headLight), side * 0.6, 0.02, hz + 0.005),
-        at(new Mesh(new BoxGeometry(0.42, 0.07, 0.04), this.brakeLight), side * 0.58, 0.06, -hz - 0.005),
-        at(new Mesh(new BoxGeometry(0.12, 0.06, 0.04), this.reverseLight), side * 0.25, 0.06, -hz - 0.005),
+        at(new Mesh(new RoundedBoxGeometry(0.36, 0.08, 0.04, 2, 0.018), headLight), side * 0.6, 0.02, hz + 0.005),
+        at(new Mesh(new RoundedBoxGeometry(0.42, 0.07, 0.04, 2, 0.018), this.brakeLight), side * 0.58, 0.06, -hz - 0.005),
+        at(new Mesh(new RoundedBoxGeometry(0.12, 0.06, 0.04, 2, 0.018), this.reverseLight), side * 0.25, 0.06, -hz - 0.005),
       );
     }
     this.root.add(body);
@@ -118,6 +122,41 @@ export class CarView {
     this.root.add(hub);
     return { hub, steer, spin };
   }
+}
+
+/**
+ * Greenhouse as a side profile extruded across the car, so the windscreen and rear
+ * window sweep down into the bonnet and rear deck instead of standing up as a box.
+ * The bevel rounds the sides and grows the outline by `round`, so the profile is drawn
+ * that much inside the visible shape; its foot dips below the body's top to hide the seam.
+ */
+function cabinGeometry(width: number): BufferGeometry {
+  const round = 0.1;
+  const profile = new Shape()
+    .moveTo(1.35, 0)
+    .lineTo(1.35, 0.1)
+    .bezierCurveTo(0.85, 0.13, 0.52, 0.48, 0.25, 0.5)
+    .quadraticCurveTo(-0.25, 0.53, -0.72, 0.5)
+    .bezierCurveTo(-1.02, 0.49, -1.4, 0.13, -1.8, 0.1)
+    .lineTo(-1.8, 0)
+    .closePath();
+  const depth = width - round * 2;
+  const geometry = new ExtrudeGeometry(profile, {
+    depth,
+    curveSegments: 24,
+    bevelThickness: round,
+    bevelSize: round,
+    bevelSegments: 6,
+  });
+  // Shape x/y become car z/y; the extrusion runs across the car, centred on it.
+  geometry.rotateY(-Math.PI / 2);
+  geometry.translate(depth / 2, 0, 0);
+  // Weld the caps to the bevel so the whole canopy shades as one smooth surface.
+  geometry.deleteAttribute('uv');
+  geometry.deleteAttribute('normal');
+  const smooth = mergeVertices(geometry);
+  smooth.computeVertexNormals();
+  return smooth;
 }
 
 function at<T extends Object3D>(object: T, x: number, y: number, z: number): T {
