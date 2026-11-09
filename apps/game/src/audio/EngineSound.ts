@@ -1,4 +1,5 @@
 import type { CarSpec } from '@drivee/shared';
+import { audioContext } from './audioContext';
 
 type EngineSpec = Pick<CarSpec['engine'], 'idleRpm' | 'redlineRpm' | 'cylinders'>;
 
@@ -29,7 +30,7 @@ export function engineTone(engine: EngineSpec, rpm: number, load: number): Engin
   return {
     frequency,
     level: Math.min(0.25 + 0.4 * l + 0.35 * rev, 1),
-    cutoff: 300 + frequency * (3 + 7 * l),
+    cutoff: 250 + frequency * (2.5 + 6 * l),
     drive: 1 + 3 * l,
   };
 }
@@ -52,8 +53,8 @@ const HARMONICS = 40;
 export class EngineSound {
   /** Null where Web Audio is unavailable (tests, very old browsers). */
   static create(engine: EngineSpec): EngineSound | null {
-    if (typeof AudioContext === 'undefined') return null;
-    return new EngineSound(new AudioContext(), engine);
+    const ctx = audioContext();
+    return ctx ? new EngineSound(ctx, engine) : null;
   }
 
   private readonly pulse: OscillatorNode;
@@ -74,7 +75,7 @@ export class EngineSound {
     const burble = new GainNode(ctx, { gain: 0.7 });
     this.halfOrder = new OscillatorNode(ctx, { type: 'sine', frequency: 25 });
     this.halfOrder.connect(new GainNode(ctx, { gain: 0.3 })).connect(burble.gain);
-    const rumble = new GainNode(ctx, { gain: 0.25 });
+    const rumble = new GainNode(ctx, { gain: 0.35 });
     this.halfOrder.connect(rumble);
 
     const noise = new AudioBufferSourceNode(ctx, { buffer: noiseBuffer(ctx), loop: true });
@@ -89,7 +90,9 @@ export class EngineSound {
     const shaper = new WaveShaperNode(ctx, { curve: saturationCurve(), oversample: '2x' });
     this.lowpass = new BiquadFilterNode(ctx, { type: 'lowpass', Q: 0.8 });
     this.output = new GainNode(ctx, { gain: 0 });
-    this.drive.connect(shaper).connect(this.lowpass).connect(this.output).connect(ctx.destination);
+    // A bass shelf after the saturator gives the note more body without muddying the distortion.
+    const body = new BiquadFilterNode(ctx, { type: 'lowshelf', frequency: 160, gain: 4 });
+    this.drive.connect(shaper).connect(this.lowpass).connect(body).connect(this.output).connect(ctx.destination);
 
     this.pulse.start();
     this.halfOrder.start();
@@ -143,7 +146,7 @@ function pulseWave(ctx: AudioContext): PeriodicWave {
   const imag = new Float32Array(HARMONICS + 1);
   for (let n = 1; n <= HARMONICS; n++) {
     // Alternating phase keeps the peak amplitude down, so less of it clips in the saturator.
-    imag[n] = (n % 2 === 0 ? -1 : 1) / Math.pow(n, 0.9);
+    imag[n] = (n % 2 === 0 ? -1 : 1) / Math.pow(n, 1);
   }
   return ctx.createPeriodicWave(real, imag);
 }
