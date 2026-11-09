@@ -10,15 +10,18 @@ import {
   CONTROLLER_PAGE,
   CONTROLLER_WS_PATH,
   isRoomCode,
+  isRtcMessage,
+  parseControlMessage,
   ROOM_ALPHABET,
   ROOM_CODE_LENGTH,
   type RelayMessage,
 } from '../../../packages/shared/src/controller';
 
 /**
- * LAN relay between the game (host) and a phone controller (pad). Each game owns a room
- * with a short code; one phone at a time can join it. The relay forwards everything
- * between the two verbatim and only speaks itself to announce the room and peer changes.
+ * LAN pairing server between the game (host) and a phone controller (pad). Each game owns
+ * a room with a short code; one phone at a time can join it. The relay only forwards WebRTC
+ * signalling between the two: inputs and all other traffic go over the data channel they
+ * set up, never through here. It speaks itself only to announce the room and peer changes.
  */
 
 interface Room {
@@ -72,7 +75,7 @@ export function attachControllerRelay(server: Server): RelayHandle {
       send(ws, { t: 'peer', connected: true });
       send(r.pad, { t: 'peer', connected: true });
     }
-    ws.on('message', (data, isBinary) => forward(r.pad, data, isBinary));
+    ws.on('message', (data, isBinary) => forwardSignal(r.pad, data, isBinary));
     ws.on('close', () => {
       if (r.host !== ws) return;
       r.host = null;
@@ -97,7 +100,7 @@ export function attachControllerRelay(server: Server): RelayHandle {
     watch(ws);
     send(ws, { t: 'peer', connected: r.host !== null });
     if (r.host) send(r.host, { t: 'peer', connected: true });
-    ws.on('message', (data, isBinary) => forward(r.host, data, isBinary));
+    ws.on('message', (data, isBinary) => forwardSignal(r.host, data, isBinary));
     ws.on('close', () => {
       if (r.pad !== ws) return;
       r.pad = null;
@@ -149,8 +152,12 @@ export function attachControllerRelay(server: Server): RelayHandle {
   };
 }
 
-function forward(to: WebSocket | null, data: RawData, isBinary: boolean): void {
-  if (to?.readyState === WebSocket.OPEN) to.send(data, { binary: isBinary });
+/** Passes WebRTC signalling on as is; anything else (inputs, game messages) is dropped. */
+function forwardSignal(to: WebSocket | null, data: RawData, isBinary: boolean): void {
+  if (isBinary || to?.readyState !== WebSocket.OPEN) return;
+  const text = data.toString();
+  const message = parseControlMessage(text);
+  if (message && isRtcMessage(message)) to.send(text);
 }
 
 function send(ws: WebSocket, message: RelayMessage): void {
