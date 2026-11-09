@@ -303,8 +303,10 @@ Slider values are saved on the phone under `localStorage['drivee.steering.v4']`.
 
 **Transport** (`server/controllerRelay.ts`, `input/PhoneInput.ts`, `controller/PadLink.ts`):
 - **Packets:** 8-byte binary input packets at 60 Hz: version, sequence number, steer i16, throttle u8, brake u8, buttons + handbrake bit.
-- **Relay:** WebSocket through the relay on the dev server, at `/controller-ws`.
-- **Freshness:** packets older than the newest are dropped, and a send is skipped if the socket is backed up.
+- **Pairing and signalling:** WebSocket to the relay on the dev server, at `/controller-ws`. It hands out the room code, announces the phone joining or leaving, and forwards only WebRTC signalling (`rtc-offer`, `rtc-answer`, `rtc-ice`). Anything else sent to it is dropped.
+- **Data channel:** once paired, the phone offers a WebRTC data channel (unordered, no retransmits, no STUN since both are on the LAN) and the game answers. Inputs, ping/pong, status and buzzes go over it and nowhere else. There is no WebSocket fallback: the phone shows "Linking to the game…" until the channel is up, and the game counts the phone as paired only while it is.
+- **Retry:** if the channel closes, fails, or isn't up within 8 s, the phone tears it down and offers again after 1 s, for as long as the game is in the room.
+- **Freshness:** packets older than the newest are dropped, and a send is skipped if the channel is backed up.
 - **Disconnect:** no packet for 500 ms means the game pauses ("Controller disconnected") and resumes when packets return.
 - **Latency:** round-trip time is measured by ping/pong every second and shown on both screens.
 

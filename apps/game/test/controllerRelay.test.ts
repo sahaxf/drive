@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
-import { decodeInput, encodeInput, parseControlMessage, type ControlMessage } from '@drivee/shared';
+import { encodeInput, parseControlMessage, type ControlMessage } from '@drivee/shared';
 import { attachControllerRelay, type RelayHandle } from '../server/controllerRelay';
 
 /** A ws client that queues what it receives so tests can await messages in order. */
@@ -69,7 +69,7 @@ describe('controller relay', () => {
     return c;
   };
 
-  it('pairs a phone with the game and relays inputs and messages both ways', async () => {
+  it('pairs a phone with the game and passes only WebRTC signalling between them', async () => {
     const host = await connect('role=host');
     const room = await host.nextMessage();
     expect(room.t).toBe('room');
@@ -83,17 +83,18 @@ describe('controller relay', () => {
     expect(await pad.nextMessage()).toEqual({ t: 'peer', connected: true });
     expect(await host.nextMessage()).toEqual({ t: 'peer', connected: true });
 
+    // Inputs and game messages are dropped: they only travel over the WebRTC data channel.
     pad.ws.send(encodeInput({ steer: -0.25, throttle: 1, brake: 0, handbrake: false, buttons: 0 }, 7));
-    const packet = await host.next();
-    expect(typeof packet).not.toBe('string');
-    const decoded = decodeInput(packet as Buffer)!;
-    expect(decoded.seq).toBe(7);
-    expect(decoded.input.steer).toBeCloseTo(-0.25, 3);
-
-    host.ws.send(JSON.stringify({ t: 'ping', id: 3 }));
-    expect(await pad.nextMessage()).toEqual({ t: 'ping', id: 3 });
     pad.ws.send(JSON.stringify({ t: 'pong', id: 3 }));
-    expect(await host.nextMessage()).toEqual({ t: 'pong', id: 3 });
+    host.ws.send(JSON.stringify({ t: 'ping', id: 3 }));
+
+    pad.ws.send(JSON.stringify({ t: 'rtc-offer', sdp: 'offer' }));
+    expect(await host.nextMessage()).toEqual({ t: 'rtc-offer', sdp: 'offer' });
+    host.ws.send(JSON.stringify({ t: 'rtc-answer', sdp: 'answer' }));
+    expect(await pad.nextMessage()).toEqual({ t: 'rtc-answer', sdp: 'answer' });
+    const candidate = { candidate: 'candidate:1 1 udp 1 192.168.1.5 5000 typ host', sdpMid: '0' };
+    pad.ws.send(JSON.stringify({ t: 'rtc-ice', candidate }));
+    expect(await host.nextMessage()).toEqual({ t: 'rtc-ice', candidate });
 
     pad.ws.close();
     expect(await host.nextMessage()).toEqual({ t: 'peer', connected: false });

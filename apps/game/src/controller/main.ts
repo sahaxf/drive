@@ -192,6 +192,8 @@ function linkText(state: LinkState): string {
       return 'Connecting…';
     case 'waiting-for-game':
       return `Waiting for the game (room ${room})`;
+    case 'linking':
+      return 'Linking to the game…';
     case 'connected':
       return rttMs === null ? 'Connected' : `Connected · ${rttMs} ms`;
     case 'replaced':

@@ -93,7 +93,7 @@ Haptics through the Vibration API:
 
 ### 4.5 Connection
 - **v1:** WebSocket through the local Node server. Inputs are sent at 60 Hz as small binary packets: steering, throttle, brake, button bitmask and sequence number.
-- **v2 (optional):** WebRTC DataChannel (unordered, unreliable) for lower latency, using the same server for signalling.
+- **v2:** WebRTC DataChannel (unordered, unreliable) for lower latency. The local Node server only pairs the devices and relays signalling; inputs and messages travel only over the data channel, with no WebSocket fallback.
 - **Latency target:** under 50 ms from phone to car on typical home Wi-Fi. Latency is measured with ping/pong and shown in debug.
 - If no input arrives for 500 ms, the game **pauses automatically** and shows "Controller disconnected". It reconnects automatically when the phone comes back.
 

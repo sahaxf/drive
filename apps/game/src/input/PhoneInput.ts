@@ -3,8 +3,10 @@ import {
   decodeInput,
   isNewerSeq,
   parseControlMessage,
+  RTC_CHANNEL_LABEL,
   type HostMessage,
   type InputState,
+  type RtcMessage,
 } from '@drivee/shared';
 import type { InputSource } from './InputSystem';
 
@@ -20,7 +22,7 @@ export interface PhoneStatus {
   room: string | null;
   /** Controller page URLs for the QR code, best guess first. */
   urls: string[];
-  /** A phone has joined the room. */
+  /** A phone is linked: its WebRTC data channel is up. */
   paired: boolean;
   /** Inputs are arriving (the phone is calibrated and in drive mode). */
   driving: boolean;
@@ -30,26 +32,49 @@ export interface PhoneStatus {
 
 /** The subset of the browser WebSocket this class uses, so tests can drive it. */
 export interface SocketLike {
-  binaryType: BinaryType;
   readonly readyState: number;
   onopen: ((ev: Event) => void) | null;
   onclose: ((ev: CloseEvent) => void) | null;
   onmessage: ((ev: MessageEvent) => void) | null;
-  send(data: string | ArrayBuffer): void;
+  send(data: string): void;
+  close(): void;
+}
+
+/** The subset of RTCPeerConnection this class uses, so tests can drive it. */
+export interface PeerLike {
+  readonly connectionState: RTCPeerConnectionState;
+  onicecandidate: ((ev: RTCPeerConnectionIceEvent) => void) | null;
+  ondatachannel: ((ev: RTCDataChannelEvent) => void) | null;
+  onconnectionstatechange: ((ev: Event) => void) | null;
+  setRemoteDescription(description: RTCSessionDescriptionInit): Promise<void>;
+  createAnswer(): Promise<RTCSessionDescriptionInit>;
+  setLocalDescription(description: RTCSessionDescriptionInit): Promise<void>;
+  addIceCandidate(candidate: RTCIceCandidateInit): Promise<void>;
   close(): void;
 }
 
 export type PhoneEvent = 'lost' | 'regained';
 
 /**
- * Phone controller as an input source. Joins the LAN relay as the room's host; the phone
- * streams binary input packets which this turns back into an {@link InputState}.
+ * Phone controller as an input source. Joins the LAN relay as the room's host, which only
+ * hands out the room code and passes WebRTC signalling: the phone offers a data channel,
+ * this answers, and everything else travels over that channel alone. The phone streams
+ * binary input packets on it which this turns back into an {@link InputState}.
  */
 export class PhoneInput implements InputSource {
   readonly name = 'phone';
-  readonly status: PhoneStatus = { online: false, room: null, urls: [], paired: false, driving: false, rttMs: null };
+  readonly status: PhoneStatus = {
+    online: false,
+    room: null,
+    urls: [],
+    paired: false,
+    driving: false,
+    rttMs: null,
+  };
 
   private socket: SocketLike | null = null;
+  private peer: PeerLike | null = null;
+  private channel: RTCDataChannel | null = null;
   private latest: InputState | null = null;
   private lastSeq = -1;
   private lastPacketAt = -Infinity;
@@ -68,23 +93,25 @@ export class PhoneInput implements InputSource {
     private readonly now: () => number = () => performance.now(),
     private readonly storage: Pick<Storage, 'getItem' | 'setItem'> | null = safeSessionStorage(),
     private readonly baseUrl: string = defaultBaseUrl(),
+    private readonly createPeer: () => PeerLike | null = defaultPeer,
   ) {}
 
   connect(): void {
     this.stopped = false;
     const room = this.storage?.getItem(ROOM_STORAGE_KEY) ?? '';
     const socket = this.openSocket(`${this.baseUrl}${CONTROLLER_WS_PATH}?role=host&room=${encodeURIComponent(room)}`);
-    socket.binaryType = 'arraybuffer';
     this.socket = socket;
     socket.onopen = () => {
       this.status.online = true;
     };
-    socket.onmessage = (ev) => this.receive(ev.data);
+    socket.onmessage = (ev) => {
+      if (typeof ev.data === 'string') this.receiveSignal(ev.data);
+    };
     socket.onclose = () => {
       if (this.socket !== socket) return;
       this.socket = null;
       this.status.online = false;
-      this.status.paired = false;
+      this.stopRtc();
       if (!this.stopped) setTimeout(() => this.connect(), RECONNECT_MS);
     };
     if (this.timers.length === 0) {
@@ -104,6 +131,7 @@ export class PhoneInput implements InputSource {
     const socket = this.socket;
     this.socket = null;
     socket?.close();
+    this.stopRtc();
   }
 
   poll(): InputState | null {
@@ -149,6 +177,17 @@ export class PhoneInput implements InputSource {
     }
     if (typeof data !== 'string') return;
     const message = parseControlMessage(data);
+    if (message?.t !== 'pong') return;
+    const sentAt = this.pingsInFlight.get(message.id);
+    if (sentAt === undefined) return;
+    this.pingsInFlight.delete(message.id);
+    const rtt = this.now() - sentAt;
+    this.status.rttMs = this.status.rttMs === null ? rtt : this.status.rttMs + (rtt - this.status.rttMs) * 0.3;
+  }
+
+  /** From the relay: the room, the phone joining or leaving, and its half of the signalling. */
+  private receiveSignal(text: string): void {
+    const message = parseControlMessage(text);
     switch (message?.t) {
       case 'room':
         this.status.room = message.code;
@@ -156,22 +195,76 @@ export class PhoneInput implements InputSource {
         this.storage?.setItem(ROOM_STORAGE_KEY, message.code);
         break;
       case 'peer':
-        this.status.paired = message.connected;
-        if (!message.connected) {
-          this.status.rttMs = null;
-          this.pingsInFlight.clear();
-        } else {
-          this.sendStatus();
-        }
+        // Joining is the phone's cue to offer a channel; there is nothing to do until it does.
+        if (!message.connected) this.stopRtc();
         break;
-      case 'pong': {
-        const sentAt = this.pingsInFlight.get(message.id);
-        if (sentAt === undefined) break;
-        this.pingsInFlight.delete(message.id);
-        const rtt = this.now() - sentAt;
-        this.status.rttMs = this.status.rttMs === null ? rtt : this.status.rttMs + (rtt - this.status.rttMs) * 0.3;
+      case 'rtc-offer':
+        void this.answer(message.sdp);
         break;
-      }
+      case 'rtc-ice':
+        this.peer?.addIceCandidate(message.candidate).catch(() => {});
+        break;
+    }
+  }
+
+  private async answer(offerSdp: string): Promise<void> {
+    // A new offer means the phone started over (it reconnected): drop the old connection.
+    this.stopRtc();
+    const peer = this.createPeer();
+    if (!peer) return;
+    this.peer = peer;
+    peer.onicecandidate = (ev) => {
+      if (ev.candidate && this.peer === peer) this.signal({ t: 'rtc-ice', candidate: ev.candidate.toJSON() });
+    };
+    peer.onconnectionstatechange = () => {
+      if (this.peer !== peer) return;
+      if (peer.connectionState === 'failed' || peer.connectionState === 'closed') this.stopRtc();
+      else this.refreshLink();
+    };
+    peer.ondatachannel = (ev) => {
+      const channel = ev.channel;
+      if (this.peer !== peer || channel.label !== RTC_CHANNEL_LABEL) return;
+      channel.binaryType = 'arraybuffer';
+      this.channel = channel;
+      channel.onopen = channel.onclose = () => {
+        if (this.channel === channel) this.refreshLink();
+      };
+      channel.onmessage = (e) => this.receive(e.data);
+      this.refreshLink();
+    };
+    try {
+      await peer.setRemoteDescription({ type: 'offer', sdp: offerSdp });
+      const answer = await peer.createAnswer();
+      await peer.setLocalDescription(answer);
+      if (this.peer === peer && answer.sdp) this.signal({ t: 'rtc-answer', sdp: answer.sdp });
+    } catch {
+      if (this.peer === peer) this.stopRtc();
+    }
+  }
+
+  private stopRtc(): void {
+    const peer = this.peer;
+    this.peer = null;
+    this.channel = null;
+    peer?.close();
+    this.refreshLink();
+  }
+
+  /** The data channel while it can carry traffic (Wi-Fi blips leave it open but stalled). */
+  private openChannel(): RTCDataChannel | null {
+    const channel = this.channel;
+    return channel?.readyState === 'open' && this.peer?.connectionState === 'connected' ? channel : null;
+  }
+
+  private refreshLink(): void {
+    const paired = this.openChannel() !== null;
+    if (paired === this.status.paired) return;
+    this.status.paired = paired;
+    if (paired) {
+      this.sendStatus();
+    } else {
+      this.status.rttMs = null;
+      this.pingsInFlight.clear();
     }
   }
 
@@ -191,6 +284,10 @@ export class PhoneInput implements InputSource {
   }
 
   private send(message: HostMessage): void {
+    this.openChannel()?.send(JSON.stringify(message));
+  }
+
+  private signal(message: RtcMessage): void {
     if (this.socket?.readyState === 1) this.socket.send(JSON.stringify(message));
   }
 }
@@ -198,6 +295,11 @@ export class PhoneInput implements InputSource {
 function defaultBaseUrl(): string {
   if (typeof location === 'undefined') return 'ws://localhost';
   return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
+}
+
+function defaultPeer(): PeerLike | null {
+  // Phone and game share a LAN, so host candidates reach each other without STUN.
+  return typeof RTCPeerConnection === 'undefined' ? null : new RTCPeerConnection();
 }
 
 function safeSessionStorage(): Storage | null {

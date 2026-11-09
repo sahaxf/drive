@@ -3,9 +3,10 @@ import type { InputState } from './input';
 /**
  * Wire protocol between the phone controller, the relay server and the game.
  *
- * Inputs travel as small binary packets (phone → game, 60 Hz). Everything else is JSON
- * text: messages the relay itself sends ({@link RelayMessage}) and messages the game and
- * phone pass to each other through it ({@link HostMessage}, {@link PadMessage}).
+ * The relay pairs the two and carries their WebRTC signalling ({@link RtcMessage}); it
+ * also announces the room and peer changes itself ({@link RelayMessage}). Everything else
+ * goes over the WebRTC data channel only: inputs as small binary packets (phone → game,
+ * 60 Hz) and JSON text messages ({@link HostMessage}, {@link PadMessage}).
  */
 
 export const CONTROLLER_WS_PATH = '/controller-ws';
@@ -40,7 +41,25 @@ export type HostMessage =
 /** Phone → game (inputs go as binary, see {@link encodeInput}). */
 export type PadMessage = { t: 'pong'; id: number };
 
-export type ControlMessage = RelayMessage | HostMessage | PadMessage;
+/**
+ * WebRTC signalling, the only thing the relay passes between game and phone. The phone
+ * offers a data channel and the game answers.
+ */
+export type RtcMessage =
+  | { t: 'rtc-offer'; sdp: string }
+  | { t: 'rtc-answer'; sdp: string }
+  | { t: 'rtc-ice'; candidate: RTCIceCandidateInit };
+
+/** Label of the phone → game data channel. */
+export const RTC_CHANNEL_LABEL = 'input';
+/** Unordered and never retransmitted: a late input is worse than a lost one. */
+export const RTC_CHANNEL_OPTIONS: RTCDataChannelInit = { ordered: false, maxRetransmits: 0 };
+
+export type ControlMessage = RelayMessage | HostMessage | PadMessage | RtcMessage;
+
+export function isRtcMessage(message: ControlMessage): message is RtcMessage {
+  return message.t === 'rtc-offer' || message.t === 'rtc-answer' || message.t === 'rtc-ice';
+}
 
 export function parseControlMessage(text: string): ControlMessage | null {
   try {
