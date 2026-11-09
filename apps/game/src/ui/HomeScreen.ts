@@ -98,6 +98,7 @@ export class HomeScreen {
     window.removeEventListener('keydown', this.onKey);
     const id = this.tracks[index]!.meta.id;
     safeSet(LAST_TRACK_KEY, id);
+    this.root.remove();
     this.onChoose(id);
   }
 
