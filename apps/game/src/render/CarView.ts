@@ -23,6 +23,9 @@ import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { CarSpec } from '@drivee/shared';
 import type { WheelId, WheelState } from '../vehicle/Vehicle';
+import { type CarModel, fitCarModel } from './carModel';
+
+const WHEEL_IDS = ['FL', 'FR', 'RL', 'RR'] as const;
 
 interface WheelNodes {
   /** Positioned at the hub; moves with suspension. */
@@ -34,8 +37,8 @@ interface WheelNodes {
 }
 
 /**
- * Procedural placeholder car until the CC0 models arrive (M5). Nodes use the same
- * logical names (`body`, `wheel_FL`, ...) that car.json mappings will target.
+ * The car's visuals: its model from car.json when it has one, otherwise a procedural
+ * placeholder. Nodes use the logical names (`body`, `wheel_FL`, ...) either way.
  */
 export class CarView {
   readonly root = new Group();
@@ -43,7 +46,11 @@ export class CarView {
   private readonly brakeLight: MeshStandardMaterial;
   private readonly reverseLight: MeshStandardMaterial;
 
-  constructor(private readonly spec: CarSpec) {
+  /** `model` is the car's parsed model file, if it has one (see loadCarModel). */
+  constructor(
+    private readonly spec: CarSpec,
+    model: Group | null = null,
+  ) {
     const paint = new MeshPhysicalMaterial({
       color: spec.visual.paintColor,
       metalness: 0.15,
@@ -62,10 +69,30 @@ export class CarView {
     const headLight = new MeshStandardMaterial({ color: '#fff', emissive: '#fff6dd', emissiveIntensity: 1.5 });
     const exhaust = new MeshStandardMaterial({ color: '#8a8d92', metalness: 1, roughness: 0.3 });
 
-    const [hx, , hz] = spec.chassis.halfExtents;
-    const { frontAxleZ, rearAxleZ } = spec.wheels;
     const body = new Group();
     body.name = 'body';
+    this.root.add(body);
+    if (model) {
+      const chrome = new MeshStandardMaterial({ color: '#c9ccd1', metalness: 1, roughness: 0.25 });
+      const rubber = new MeshStandardMaterial({ color: '#161616', roughness: 0.9 });
+      const hubY = (restHubY(spec, true) + restHubY(spec, false)) / 2;
+      const fitted = fitCarModel(spec, model, hubY, {
+        paint,
+        glass,
+        trim,
+        chrome,
+        rubber,
+        headlight: headLight,
+        brakeLight: this.brakeLight,
+        reverseLight: this.reverseLight,
+      });
+      body.add(fitted.body);
+      for (const id of WHEEL_IDS) this.wheels.set(id, this.mountModelWheel(id, fitted));
+      return;
+    }
+
+    const [hx, , hz] = spec.chassis.halfExtents;
+    const { frontAxleZ, rearAxleZ } = spec.wheels;
     body.add(
       shadowed(new Mesh(bodyGeometry(spec), shell), 0, 0, 0),
       shadowed(new Mesh(cabinGeometry(hx * 1.6), glass), 0, 0, 0),
@@ -97,11 +124,7 @@ export class CarView {
         ),
       );
     }
-    this.root.add(body);
-
-    for (const id of ['FL', 'FR', 'RL', 'RR'] as const) {
-      this.wheels.set(id, this.buildWheel(id));
-    }
+    for (const id of WHEEL_IDS) this.wheels.set(id, this.buildWheel(id));
   }
 
   update(position: Vector3, rotation: Quaternion, wheels: readonly WheelState[], braking: boolean, reversing: boolean): void {
@@ -117,15 +140,33 @@ export class CarView {
     this.reverseLight.emissiveIntensity = reversing ? 2 : 0;
   }
 
-  private buildWheel(id: WheelId): WheelNodes {
-    const { radius, width } = this.spec.wheels;
-    const left = id.endsWith('L');
+  /** Empty hub, steer and spin nodes for a wheel, added to the car. */
+  private wheelNodes(id: WheelId): WheelNodes {
     const hub = new Group();
     hub.name = `wheel_${id}`;
     const steer = new Group();
     const spin = new Group();
     hub.add(steer);
     steer.add(spin);
+    this.root.add(hub);
+    return { hub, steer, spin };
+  }
+
+  /** A wheel from the car's model, kept where the model has it across the car. */
+  private mountModelWheel(id: WheelId, model: CarModel): WheelNodes {
+    const nodes = this.wheelNodes(id);
+    const front = id.startsWith('F');
+    const track = front ? this.spec.wheels.trackFront : this.spec.wheels.trackRear;
+    // The hub sits at the spec's track; shift the spinning wheel to the model's arch.
+    nodes.spin.position.x = model.wheelX[id] - (id.endsWith('L') ? 1 : -1) * (track / 2);
+    nodes.spin.add(model.wheels[id]);
+    return nodes;
+  }
+
+  private buildWheel(id: WheelId): WheelNodes {
+    const { radius, width } = this.spec.wheels;
+    const left = id.endsWith('L');
+    const { hub, steer, spin } = this.wheelNodes(id);
 
     const rubber = new MeshStandardMaterial({ color: '#161616', roughness: 0.9 });
     const rim = new MeshStandardMaterial({ color: '#c9ccd1', metalness: 1, roughness: 0.25 });
@@ -161,7 +202,6 @@ export class CarView {
     // The caliper steers with the wheel but does not spin.
     steer.add(at(new Mesh(new RoundedBoxGeometry(0.05, 0.1, 0.16, 2, 0.02), caliper), outward * 0.01, rimRadius * 0.55, -rimRadius * 0.35));
 
-    this.root.add(hub);
     return { hub, steer, spin };
   }
 }

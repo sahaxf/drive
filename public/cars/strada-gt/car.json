@@ -2,7 +2,20 @@
   "id": "strada-gt",
   "name": "Strada GT",
   "visual": {
-    "paintColor": "#7e858b"
+    "model": "model.obj",
+    "paintColor": "#7e858b",
+    "wheelNodes": { "front": "Plano.009_Plano.024", "rear": "Plano.061_Plano.062" },
+    "hiddenNodes": ["Cilindro.002_Cilindro.006", "Cilindro.003_Cilindro.007"],
+    "materials": {
+      "Materiais.010": "paint",
+      "Materiais.019": "glass",
+      "Materiais.017": "chrome",
+      "Materiais.021": "chrome",
+      "Materiais.029": "rubber",
+      "Materiais.024": "headlight",
+      "Materiais.028": "headlight",
+      "Materiais.025": "brakeLight"
+    }
   },
   "chassis": {
     "mass": 1350,
