@@ -7,9 +7,12 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev -w @drivee/game",
+    "dev": "node tools/dev.mjs",
+    "dev:game": "npm run dev -w @drivee/game",
+    "dev:signal": "uv run --directory apps/signaling uvicorn signaling.app:app --host 127.0.0.1 --port 8000",
     "build": "npm run build -w @drivee/game",
-    "test": "npm run test --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present && npm run test:signal",
+    "test:signal": "uv run --directory apps/signaling pytest -q",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {

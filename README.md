@@ -5,13 +5,17 @@ TypeScript + Three.js + Rapier. Full spec: [docs/REQUIREMENTS.md](docs/REQUIREME
 
 ## Run
 
+Needs Node and [uv](https://docs.astral.sh/uv/) (for the Python signalling server).
+
 ```sh
 npm install
-npm run dev        # http://localhost:5173
-npm test           # unit + headless physics tests
+npm run dev        # https://localhost:5173 plus the signalling server on :8000
+npm test           # unit + headless physics tests, then the signalling server's tests
 npm run typecheck
 npm run build
 ```
+
+`npm run dev:game` and `npm run dev:signal` start either one on its own.
 
 ## Controls (keyboard)
 
@@ -41,6 +45,7 @@ apps/game/          the game (Vite app)
   src/track/        track generation from track.json (no rendering): spline, road,
                     terrain, far landscape, forest placement, physics colliders
   src/render/track/ track visuals: road furniture, terrain, mountains, forest
+apps/signaling/     FastAPI server that pairs the game with a phone and passes WebRTC signalling
 packages/shared/    types shared with controller/server: InputState, car.json + track.json schemas
 public/cars/        car packages (car.json + model)
 public/tracks/      track packages (track.json)

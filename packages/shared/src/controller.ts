@@ -1,15 +1,19 @@
 import type { InputState } from './input';
 
 /**
- * Wire protocol between the phone controller, the relay server and the game.
+ * Wire protocol between the phone controller, the signalling server and the game.
  *
- * The relay pairs the two and carries their WebRTC signalling ({@link RtcMessage}); it
- * also announces the room and peer changes itself ({@link RelayMessage}). Everything else
- * goes over the WebRTC data channel only: inputs as small binary packets (phone → game,
- * 60 Hz) and JSON text messages ({@link HostMessage}, {@link PadMessage}).
+ * The signalling server (apps/signaling, FastAPI, over HTTP at {@link SIGNAL_PATH}) pairs
+ * the two and carries their WebRTC signalling ({@link RtcMessage}); it also announces peer
+ * changes itself ({@link ServerMessage}). Everything else goes over the WebRTC data channel
+ * only: inputs as small binary packets (phone → game, 60 Hz) and JSON text messages
+ * ({@link HostMessage}, {@link PadMessage}).
+ *
+ * apps/signaling/signaling/protocol.py mirrors the server's half of this: keep them in sync.
  */
 
-export const CONTROLLER_WS_PATH = '/controller-ws';
+/** The signalling API, proxied by the Vite server so it shares the page's origin. */
+export const SIGNAL_PATH = '/signal';
 export const CONTROLLER_PAGE = '/controller.html';
 
 /** Room codes avoid look-alike characters (0/O, 1/I/L) so they can be typed from the screen. */
@@ -22,10 +26,8 @@ export function isRoomCode(value: string): boolean {
 
 export type Role = 'host' | 'pad';
 
-/** Sent by the relay itself. */
-export type RelayMessage =
-  /** To the host: the room it owns and the addresses a phone on the LAN can open. */
-  | { t: 'room'; code: string; urls: string[] }
+/** Sent by the signalling server itself. */
+export type ServerMessage =
   /** The other side of the room connected or went away. */
   | { t: 'peer'; connected: boolean }
   /** A newer phone took over this room; don't reconnect. */
@@ -42,8 +44,8 @@ export type HostMessage =
 export type PadMessage = { t: 'pong'; id: number };
 
 /**
- * WebRTC signalling, the only thing the relay passes between game and phone. The phone
- * offers a data channel and the game answers.
+ * WebRTC signalling, the only thing the signalling server passes between game and phone.
+ * The phone offers a data channel and the game answers.
  */
 export type RtcMessage =
   | { t: 'rtc-offer'; sdp: string }
@@ -55,10 +57,28 @@ export const RTC_CHANNEL_LABEL = 'input';
 /** Unordered and never retransmitted: a late input is worse than a lost one. */
 export const RTC_CHANNEL_OPTIONS: RTCDataChannelInit = { ordered: false, maxRetransmits: 0 };
 
-export type ControlMessage = RelayMessage | HostMessage | PadMessage | RtcMessage;
+/** What a poll of the signalling server returns. */
+export type SignalMessage = ServerMessage | RtcMessage;
 
-export function isRtcMessage(message: ControlMessage): message is RtcMessage {
-  return message.t === 'rtc-offer' || message.t === 'rtc-answer' || message.t === 'rtc-ice';
+export type ControlMessage = SignalMessage | HostMessage | PadMessage;
+
+// Signalling HTTP bodies. Each side joins (POST host/pad), long-polls (GET poll?peer=) for
+// its messages, posts its own (POST send) and says goodbye (POST leave) when the page goes.
+
+export interface HostJoinResponse {
+  code: string;
+  /** Secret id for this session's poll/send/leave requests. */
+  peer: string;
+  /** Addresses of the server machine a phone on the LAN might reach, best guess first. */
+  lanAddresses: string[];
+}
+
+export interface PadJoinResponse {
+  peer: string;
+}
+
+export interface PollResponse {
+  messages: SignalMessage[];
 }
 
 export function parseControlMessage(text: string): ControlMessage | null {

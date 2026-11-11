@@ -1,13 +1,14 @@
 import {
-  CONTROLLER_WS_PATH,
   encodeInput,
   parseControlMessage,
   RTC_CHANNEL_LABEL,
   RTC_CHANNEL_OPTIONS,
   type PadMessage,
   type RtcMessage,
+  type SignalMessage,
 } from '@drivee/shared/controller';
 import type { InputState } from '@drivee/shared/input';
+import { SignalClient } from '../net/SignalClient';
 
 const RECONNECT_MS = 1000;
 /** A data channel that isn't up by then (ICE stuck checking) is torn down and offered again. */
@@ -28,13 +29,13 @@ export interface LinkCallbacks {
 }
 
 /**
- * The phone's side of the link. The relay only pairs the phone with the game and carries
- * WebRTC signalling; inputs, pings, status and buzzes travel over the data channel alone.
- * If the channel fails while the game is there, it is offered again.
+ * The phone's side of the link. The signalling server only pairs the phone with the game
+ * and carries WebRTC signalling; inputs, pings, status and buzzes travel over the data
+ * channel alone. If the channel fails while the game is there, it is offered again.
  */
 export class PadLink {
   state: LinkState = 'connecting';
-  private socket: WebSocket | null = null;
+  private signal: SignalClient | null = null;
   private peer: RTCPeerConnection | null = null;
   private channel: RTCDataChannel | null = null;
   private gamePresent = false;
@@ -48,22 +49,17 @@ export class PadLink {
   ) {}
 
   connect(): void {
-    const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-    const socket = new WebSocket(`${protocol}://${location.host}${CONTROLLER_WS_PATH}?role=pad&room=${this.room}`);
-    this.socket = socket;
     this.setState('connecting');
-    socket.onmessage = (ev) => {
-      if (typeof ev.data === 'string') this.receiveSignal(ev.data);
-    };
-    socket.onclose = () => {
-      if (this.socket !== socket) return;
-      this.socket = null;
-      this.gamePresent = false;
-      this.stopRtc();
-      if (this.stopped) return;
-      this.setState('connecting');
-      setTimeout(() => this.connect(), RECONNECT_MS);
-    };
+    this.signal = new SignalClient('pad', this.room, {
+      // The server follows a join with a peer notice, which sets the real state.
+      onJoin: () => {},
+      onMessage: (message) => this.receiveSignal(message),
+      // A data channel that's up keeps working without the signalling server.
+      onOffline: () => {
+        if (this.state !== 'connected') this.setState('connecting');
+      },
+    });
+    this.signal.start();
   }
 
   sendInput(input: InputState): void {
@@ -73,12 +69,14 @@ export class PadLink {
     this.seq = (this.seq + 1) & 0xffff;
   }
 
-  /** From the relay: pairing changes and the game's half of the signalling. */
-  private receiveSignal(text: string): void {
-    const message = parseControlMessage(text);
-    switch (message?.t) {
+  /** From the signalling server: pairing changes and the game's half of the signalling. */
+  private receiveSignal(message: SignalMessage): void {
+    switch (message.t) {
       case 'peer':
         this.gamePresent = message.connected;
+        // A channel that's up is kept: a lapse in the game's polling doesn't mean it's gone,
+        // and if it is, the channel closes and the next notice decides.
+        if (this.openChannel()) break;
         if (message.connected) {
           this.setState('linking');
           this.startRtc();
@@ -89,6 +87,7 @@ export class PadLink {
         break;
       case 'replaced':
         this.stopped = true;
+        this.signal?.stop();
         this.stopRtc();
         this.setState('replaced');
         break;
@@ -128,7 +127,7 @@ export class PadLink {
     this.channel = channel;
     this.retryTimer = setTimeout(() => this.retryRtc(), RTC_TIMEOUT_MS);
     peer.onicecandidate = (ev) => {
-      if (ev.candidate && this.peer === peer) this.signal({ t: 'rtc-ice', candidate: ev.candidate.toJSON() });
+      if (ev.candidate && this.peer === peer) this.sendSignal({ t: 'rtc-ice', candidate: ev.candidate.toJSON() });
     };
     peer.onconnectionstatechange = () => {
       if (this.peer !== peer) return;
@@ -148,7 +147,7 @@ export class PadLink {
       try {
         const offer = await peer.createOffer();
         await peer.setLocalDescription(offer);
-        if (this.peer === peer && offer.sdp) this.signal({ t: 'rtc-offer', sdp: offer.sdp });
+        if (this.peer === peer && offer.sdp) this.sendSignal({ t: 'rtc-offer', sdp: offer.sdp });
       } catch {
         if (this.peer === peer) this.retryRtc();
       }
@@ -158,7 +157,11 @@ export class PadLink {
   /** The channel died or never came up: start over while the game is still there. */
   private retryRtc(): void {
     this.stopRtc();
-    if (!this.gamePresent || this.stopped) return;
+    if (this.stopped) return;
+    if (!this.gamePresent) {
+      this.setState('waiting-for-game');
+      return;
+    }
     this.setState('linking');
     this.retryTimer = setTimeout(() => this.startRtc(), RECONNECT_MS);
   }
@@ -192,8 +195,8 @@ export class PadLink {
     this.openChannel()?.send(JSON.stringify(message));
   }
 
-  private signal(message: RtcMessage): void {
-    if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message));
+  private sendSignal(message: RtcMessage): void {
+    this.signal?.send(message);
   }
 
   private setState(state: LinkState): void {

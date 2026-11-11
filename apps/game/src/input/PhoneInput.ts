@@ -1,5 +1,4 @@
 import {
-  CONTROLLER_WS_PATH,
   decodeInput,
   isNewerSeq,
   parseControlMessage,
@@ -7,17 +6,18 @@ import {
   type HostMessage,
   type InputState,
   type RtcMessage,
+  type SignalMessage,
 } from '@drivee/shared';
+import { controllerUrls, SignalClient, type Signal, type SignalCallbacks } from '../net/SignalClient';
 import type { InputSource } from './InputSystem';
 
 /** No packet for this long while driving means the phone is gone: the game pauses. */
 export const PHONE_TIMEOUT_MS = 500;
 const PING_INTERVAL_MS = 1000;
-const RECONNECT_MS = 1000;
 const ROOM_STORAGE_KEY = 'drivee.controllerRoom';
 
 export interface PhoneStatus {
-  /** Connected to the relay (so the room code and QR are valid). */
+  /** Reaching the signalling server (so the room code and QR are valid). */
   online: boolean;
   room: string | null;
   /** Controller page URLs for the QR code, best guess first. */
@@ -30,15 +30,8 @@ export interface PhoneStatus {
   rttMs: number | null;
 }
 
-/** The subset of the browser WebSocket this class uses, so tests can drive it. */
-export interface SocketLike {
-  readonly readyState: number;
-  onopen: ((ev: Event) => void) | null;
-  onclose: ((ev: CloseEvent) => void) | null;
-  onmessage: ((ev: MessageEvent) => void) | null;
-  send(data: string): void;
-  close(): void;
-}
+/** Where the game page was opened from, for the controller URLs. */
+export type PageLocation = Pick<Location, 'protocol' | 'hostname' | 'port'>;
 
 /** The subset of RTCPeerConnection this class uses, so tests can drive it. */
 export interface PeerLike {
@@ -56,10 +49,10 @@ export interface PeerLike {
 export type PhoneEvent = 'lost' | 'regained';
 
 /**
- * Phone controller as an input source. Joins the LAN relay as the room's host, which only
- * hands out the room code and passes WebRTC signalling: the phone offers a data channel,
- * this answers, and everything else travels over that channel alone. The phone streams
- * binary input packets on it which this turns back into an {@link InputState}.
+ * Phone controller as an input source. Joins the signalling server as the room's host,
+ * which only hands out the room code and passes WebRTC signalling: the phone offers a data
+ * channel, this answers, and everything else travels over that channel alone. The phone
+ * streams binary input packets on it which this turns back into an {@link InputState}.
  */
 export class PhoneInput implements InputSource {
   readonly name = 'phone';
@@ -72,7 +65,7 @@ export class PhoneInput implements InputSource {
     rttMs: null,
   };
 
-  private socket: SocketLike | null = null;
+  private signal: Signal | null = null;
   private peer: PeerLike | null = null;
   private channel: RTCDataChannel | null = null;
   private latest: InputState | null = null;
@@ -86,34 +79,37 @@ export class PhoneInput implements InputSource {
   private readonly pingsInFlight = new Map<number, number>();
   private paused = false;
   private timers: ReturnType<typeof setInterval>[] = [];
-  private stopped = false;
 
   constructor(
-    private readonly openSocket: (url: string) => SocketLike = (url) => new WebSocket(url),
+    private readonly createSignal: (room: string, callbacks: SignalCallbacks) => Signal = (room, callbacks) =>
+      new SignalClient('host', room, callbacks),
     private readonly now: () => number = () => performance.now(),
     private readonly storage: Pick<Storage, 'getItem' | 'setItem'> | null = safeSessionStorage(),
-    private readonly baseUrl: string = defaultBaseUrl(),
+    private readonly page: PageLocation = defaultPage(),
     private readonly createPeer: () => PeerLike | null = defaultPeer,
   ) {}
 
   connect(): void {
-    this.stopped = false;
+    if (this.signal) return;
+    // A reloading game asks for its old code back, so a paired phone stays paired.
     const room = this.storage?.getItem(ROOM_STORAGE_KEY) ?? '';
-    const socket = this.openSocket(`${this.baseUrl}${CONTROLLER_WS_PATH}?role=host&room=${encodeURIComponent(room)}`);
-    this.socket = socket;
-    socket.onopen = () => {
-      this.status.online = true;
-    };
-    socket.onmessage = (ev) => {
-      if (typeof ev.data === 'string') this.receiveSignal(ev.data);
-    };
-    socket.onclose = () => {
-      if (this.socket !== socket) return;
-      this.socket = null;
-      this.status.online = false;
-      this.stopRtc();
-      if (!this.stopped) setTimeout(() => this.connect(), RECONNECT_MS);
-    };
+    this.signal = this.createSignal(room, {
+      onJoin: ({ code, lanAddresses }) => {
+        this.status.online = true;
+        this.status.room = code;
+        this.status.urls = controllerUrls(this.page, lanAddresses, code);
+        this.storage?.setItem(ROOM_STORAGE_KEY, code);
+      },
+      onMessage: (message) => {
+        this.status.online = true;
+        this.receiveSignal(message);
+      },
+      // A data channel that's up keeps working without the signalling server.
+      onOffline: () => {
+        this.status.online = false;
+      },
+    });
+    this.signal.start();
     if (this.timers.length === 0) {
       this.timers.push(
         setInterval(() => {
@@ -125,12 +121,11 @@ export class PhoneInput implements InputSource {
   }
 
   disconnect(): void {
-    this.stopped = true;
     for (const t of this.timers) clearInterval(t);
     this.timers = [];
-    const socket = this.socket;
-    this.socket = null;
-    socket?.close();
+    this.signal?.stop();
+    this.signal = null;
+    this.status.online = false;
     this.stopRtc();
   }
 
@@ -185,19 +180,13 @@ export class PhoneInput implements InputSource {
     this.status.rttMs = this.status.rttMs === null ? rtt : this.status.rttMs + (rtt - this.status.rttMs) * 0.3;
   }
 
-  /** From the relay: the room, the phone joining or leaving, and its half of the signalling. */
-  private receiveSignal(text: string): void {
-    const message = parseControlMessage(text);
-    switch (message?.t) {
-      case 'room':
-        this.status.room = message.code;
-        this.status.urls = message.urls;
-        this.storage?.setItem(ROOM_STORAGE_KEY, message.code);
-        break;
-      case 'peer':
-        // Joining is the phone's cue to offer a channel; there is nothing to do until it does.
-        if (!message.connected) this.stopRtc();
-        break;
+  /**
+   * From the signalling server: the phone's half of the signalling. Peer notices are left
+   * alone: a phone joining is its cue to offer, and a phone leaving closes the channel
+   * itself, whereas a dropped poll on either side shouldn't cut a channel that still works.
+   */
+  private receiveSignal(message: SignalMessage): void {
+    switch (message.t) {
       case 'rtc-offer':
         void this.answer(message.sdp);
         break;
@@ -214,7 +203,7 @@ export class PhoneInput implements InputSource {
     if (!peer) return;
     this.peer = peer;
     peer.onicecandidate = (ev) => {
-      if (ev.candidate && this.peer === peer) this.signal({ t: 'rtc-ice', candidate: ev.candidate.toJSON() });
+      if (ev.candidate && this.peer === peer) this.sendSignal({ t: 'rtc-ice', candidate: ev.candidate.toJSON() });
     };
     peer.onconnectionstatechange = () => {
       if (this.peer !== peer) return;
@@ -236,7 +225,7 @@ export class PhoneInput implements InputSource {
       await peer.setRemoteDescription({ type: 'offer', sdp: offerSdp });
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
-      if (this.peer === peer && answer.sdp) this.signal({ t: 'rtc-answer', sdp: answer.sdp });
+      if (this.peer === peer && answer.sdp) this.sendSignal({ t: 'rtc-answer', sdp: answer.sdp });
     } catch {
       if (this.peer === peer) this.stopRtc();
     }
@@ -287,14 +276,13 @@ export class PhoneInput implements InputSource {
     this.openChannel()?.send(JSON.stringify(message));
   }
 
-  private signal(message: RtcMessage): void {
-    if (this.socket?.readyState === 1) this.socket.send(JSON.stringify(message));
+  private sendSignal(message: RtcMessage): void {
+    this.signal?.send(message);
   }
 }
 
-function defaultBaseUrl(): string {
-  if (typeof location === 'undefined') return 'ws://localhost';
-  return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
+function defaultPage(): PageLocation {
+  return typeof location === 'undefined' ? { protocol: 'https:', hostname: 'localhost', port: '' } : location;
 }
 
 function defaultPeer(): PeerLike | null {

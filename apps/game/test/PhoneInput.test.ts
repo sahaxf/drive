@@ -1,22 +1,29 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { Button, encodeInput, type InputState } from '@drivee/shared';
-import { PhoneInput, PHONE_TIMEOUT_MS, type PeerLike, type SocketLike } from '../src/input/PhoneInput';
+import { Button, encodeInput, type InputState, type RtcMessage, type SignalMessage } from '@drivee/shared';
+import { PhoneInput, PHONE_TIMEOUT_MS, type PeerLike } from '../src/input/PhoneInput';
+import type { Signal, SignalCallbacks } from '../src/net/SignalClient';
 
-class FakeSocket implements SocketLike {
-  readyState = 1;
-  onopen: ((ev: Event) => void) | null = null;
-  onclose: ((ev: CloseEvent) => void) | null = null;
-  onmessage: ((ev: MessageEvent) => void) | null = null;
-  readonly sent: string[] = [];
-  constructor(readonly url: string) {}
-  send(data: string): void {
-    this.sent.push(data);
+class FakeSignal implements Signal {
+  readonly sent: RtcMessage[] = [];
+  started = false;
+  constructor(
+    readonly room: string,
+    readonly callbacks: SignalCallbacks,
+  ) {}
+  start(): void {
+    this.started = true;
   }
-  close(): void {
-    this.readyState = 3;
+  stop(): void {
+    this.started = false;
   }
-  receive(data: unknown): void {
-    this.onmessage?.({ data } as MessageEvent);
+  send(message: RtcMessage): void {
+    this.sent.push(message);
+  }
+  join(code: string, lanAddresses: string[] = []): void {
+    this.callbacks.onJoin({ code, lanAddresses });
+  }
+  receive(message: SignalMessage): void {
+    this.callbacks.onMessage(message);
   }
 }
 
@@ -95,14 +102,14 @@ describe('PhoneInput', () => {
 
   function setup() {
     let clock = 0;
-    let socket!: FakeSocket;
+    let signal!: FakeSignal;
     const peers: FakePeer[] = [];
     const store = new Map<string, string>();
     phone = new PhoneInput(
-      (url) => (socket = new FakeSocket(url)),
+      (room, callbacks) => (signal = new FakeSignal(room, callbacks)),
       () => clock,
       { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => void store.set(k, v) },
-      'wss://game.test',
+      { protocol: 'https:', hostname: 'localhost', port: '5173' },
       () => {
         const peer = new FakePeer();
         peers.push(peer);
@@ -111,7 +118,7 @@ describe('PhoneInput', () => {
     );
     phone.connect();
     return {
-      socket: () => socket,
+      signal: () => signal,
       advance: (ms: number) => (clock += ms),
       store,
       peers,
@@ -120,8 +127,8 @@ describe('PhoneInput', () => {
 
   /** The phone joins, offers, and the data channel comes up. */
   async function link(env: ReturnType<typeof setup>) {
-    env.socket().receive(JSON.stringify({ t: 'peer', connected: true }));
-    env.socket().receive(JSON.stringify({ t: 'rtc-offer', sdp: 'offer-sdp' }));
+    env.signal().receive({ t: 'peer', connected: true });
+    env.signal().receive({ t: 'rtc-offer', sdp: 'offer-sdp' });
     await flush();
     const peer = env.peers.at(-1)!;
     const channel = peer.openChannel();
@@ -132,14 +139,17 @@ describe('PhoneInput', () => {
 
   it('reports room, then paired once the data channel is up, then driving from packets', async () => {
     const env = setup();
-    expect(env.socket().url).toBe('wss://game.test/controller-ws?role=host&room=');
-    env.socket().receive(JSON.stringify({ t: 'room', code: 'AB2C', urls: ['https://192.168.1.5:5173/controller.html?room=AB2C'] }));
+    expect(env.signal().started).toBe(true);
+    expect(env.signal().room).toBe('');
+    env.signal().join('AB2C', ['192.168.1.5']);
+    expect(phone.status.online).toBe(true);
     expect(phone.status.room).toBe('AB2C');
+    expect(phone.status.urls).toEqual(['https://192.168.1.5:5173/controller.html?room=AB2C']);
     expect(env.store.get('drivee.controllerRoom')).toBe('AB2C');
     expect(phone.poll()).toBeNull();
 
     // The phone being in the room isn't enough: nothing flows until the channel is up.
-    env.socket().receive(JSON.stringify({ t: 'peer', connected: true }));
+    env.signal().receive({ t: 'peer', connected: true });
     expect(phone.status.paired).toBe(false);
 
     const { channel } = await link(env);
@@ -154,39 +164,35 @@ describe('PhoneInput', () => {
 
   it('asks for its old room back after a reload', () => {
     const first = setup();
-    first.socket().receive(JSON.stringify({ t: 'room', code: 'XY9Z', urls: [] }));
+    first.signal().join('XY9Z');
     phone.disconnect();
-    let url = '';
+    expect(first.signal().started).toBe(false);
+    let asked = '';
     phone = new PhoneInput(
-      (u) => {
-        url = u;
-        return new FakeSocket(u);
+      (room, callbacks) => {
+        asked = room;
+        return new FakeSignal(room, callbacks);
       },
       () => 0,
       { getItem: (k) => first.store.get(k) ?? null, setItem: () => {} },
-      'wss://game.test',
     );
     phone.connect();
-    expect(url).toContain('room=XY9Z');
+    expect(asked).toBe('XY9Z');
   });
 
-  it('answers the WebRTC offer from the phone through the relay', async () => {
+  it('answers the WebRTC offer from the phone through the signalling server', async () => {
     const env = setup();
     const { peer } = await link(env);
     expect(peer.remote).toEqual({ type: 'offer', sdp: 'offer-sdp' });
-    expect(env.socket().sent.map((m) => JSON.parse(m) as unknown)).toContainEqual({ t: 'rtc-answer', sdp: 'answer-sdp' });
+    expect(env.signal().sent).toContainEqual({ t: 'rtc-answer', sdp: 'answer-sdp' });
 
-    env.socket().receive(JSON.stringify({ t: 'rtc-ice', candidate: { candidate: 'c1', sdpMid: '0' } }));
+    env.signal().receive({ t: 'rtc-ice', candidate: { candidate: 'c1', sdpMid: '0' } });
     await flush();
     expect(peer.candidates).toEqual([{ candidate: 'c1', sdpMid: '0' }]);
   });
 
-  it('never takes inputs or sends messages through the relay', async () => {
+  it('sends messages over the data channel, never through signalling', async () => {
     const env = setup();
-    env.socket().receive(JSON.stringify({ t: 'peer', connected: true }));
-    env.socket().receive(encodeInput(input({ throttle: 1 }), 0));
-    expect(phone.poll()).toBeNull();
-
     const { channel } = await link(env);
     channel.receive(encodeInput(input({ throttle: 1 }), 0));
     phone.poll();
@@ -194,10 +200,23 @@ describe('PhoneInput', () => {
     (phone as unknown as { sendPing(): void }).sendPing();
     expect(channel.sent).toContain(JSON.stringify({ t: 'buzz', pattern: [30] }));
     expect(channel.sent.some((m) => m.includes('"ping"'))).toBe(true);
-    expect(env.socket().sent.every((m) => (JSON.parse(m) as { t: string }).t.startsWith('rtc-'))).toBe(true);
+    expect(env.signal().sent.every((m) => m.t.startsWith('rtc-'))).toBe(true);
   });
 
-  it('unpairs while the channel stalls, and drops it when it fails or the phone leaves', async () => {
+  it('keeps a working channel when the signalling server goes away', async () => {
+    const env = setup();
+    env.signal().join('AB2C');
+    const { peer } = await link(env);
+    env.signal().callbacks.onOffline();
+    expect(phone.status.online).toBe(false);
+    expect(phone.status.paired).toBe(true);
+    // Nor does a lapse in the phone's polling cut it.
+    env.signal().receive({ t: 'peer', connected: false });
+    expect(peer.closed).toBe(false);
+    expect(phone.status.paired).toBe(true);
+  });
+
+  it('unpairs while the channel stalls, and drops it when it fails', async () => {
     const env = setup();
     const { peer } = await link(env);
     peer.setState('disconnected');
@@ -207,17 +226,12 @@ describe('PhoneInput', () => {
     peer.setState('failed');
     expect(peer.closed).toBe(true);
     expect(phone.status.paired).toBe(false);
-
-    const second = await link(env);
-    env.socket().receive(JSON.stringify({ t: 'peer', connected: false }));
-    expect(second.peer.closed).toBe(true);
-    expect(phone.status.paired).toBe(false);
   });
 
   it('replaces the connection when the phone offers again', async () => {
     const env = setup();
     const first = await link(env);
-    env.socket().receive(JSON.stringify({ t: 'rtc-offer', sdp: 'offer-2' }));
+    env.signal().receive({ t: 'rtc-offer', sdp: 'offer-2' });
     expect(first.peer.closed).toBe(true);
     expect(env.peers.length).toBe(2);
   });

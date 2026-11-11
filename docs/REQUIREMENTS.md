@@ -93,7 +93,7 @@ Haptics through the Vibration API:
 
 ### 4.5 Connection
 - **v1:** WebSocket through the local Node server. Inputs are sent at 60 Hz as small binary packets: steering, throttle, brake, button bitmask and sequence number.
-- **v2:** WebRTC DataChannel (unordered, unreliable) for lower latency. The local Node server only pairs the devices and relays signalling; inputs and messages travel only over the data channel, with no WebSocket fallback.
+- **v2:** WebRTC DataChannel (unordered, unreliable) for lower latency. A FastAPI signalling server pairs the devices and passes signalling over plain HTTP (long-polling); there is no WebSocket. Inputs and messages travel only over the data channel.
 - **Latency target:** under 50 ms from phone to car on typical home Wi-Fi. Latency is measured with ping/pong and shown in debug.
 - If no input arrives for 500 ms, the game **pauses automatically** and shows "Controller disconnected". It reconnects automatically when the phone comes back.
 
@@ -401,7 +401,7 @@ public/cars/<car-id>/
 | Rendering | three (pinned version), postprocessing library |
 | Physics | @dimforge/rapier3d-compat |
 | Validation | zod |
-| Server | Node.js + `ws` (rooms, relay, static hosting over HTTPS) |
+| Server | Vite (static hosting over HTTPS, proxies `/signal`); FastAPI signalling server (rooms, WebRTC signalling over HTTP), in-memory store for now, Redis later |
 | Controller page | Separate lightweight Vite entry; no Three.js |
 | Tests | Vitest (physics maths, spline maths, schema, race logic) |
 
@@ -411,7 +411,7 @@ drivee/
   apps/
     game/            Three.js game (desktop browser)
     controller/      phone controller page
-    server/          LAN server: pairing, relay, static files, HTTPS
+    signaling/       FastAPI signalling server: pairing, WebRTC signalling
   packages/
     shared/          protocol types, track/car schemas, maths utils
   tools/
