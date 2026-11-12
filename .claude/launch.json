@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "drivee",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "url": "https://localhost:5173",
+      "port": 5173
+    }
+  ]
+}

@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./input": "./src/input.ts",
-    "./controller": "./src/controller.ts"
+    "./controller": "./src/controller.ts",
+    "./account": "./src/account.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

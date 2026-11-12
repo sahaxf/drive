@@ -1,0 +1,115 @@
+{
+  "id": "formula",
+  "name": "Formula",
+  "visual": {
+    "model": "model.glb",
+    "modelYawDeg": 180,
+    "defaultMaterial": "model",
+    "wheelCuts": {
+      "front": { "z": 0.308, "y": -0.049, "radius": 0.075, "innerX": 0.13 },
+      "rear": { "z": -0.371, "y": -0.048, "radius": 0.075, "innerX": 0.14 }
+    }
+  },
+  "chassis": {
+    "mass": 1350,
+    "halfExtents": [0.75, 0.32, 2.6],
+    "centerOfMass": [0, -0.12, -0.1],
+    "inertiaScale": [1, 1, 1]
+  },
+  "wheels": {
+    "radius": 0.38,
+    "width": 0.38,
+    "inertia": 1.2,
+    "frontAxleZ": 1.65,
+    "rearAxleZ": -1.95,
+    "trackFront": 1.8,
+    "trackRear": 2.0,
+    "mountY": 0.0,
+    "rollInfluence": 0.75
+  },
+  "suspension": {
+    "front": {
+      "restLength": 0.3,
+      "stiffness": 38000,
+      "bumpDamping": 3200,
+      "reboundDamping": 4200,
+      "antiRoll": 14000
+    },
+    "rear": {
+      "restLength": 0.3,
+      "stiffness": 36000,
+      "bumpDamping": 3000,
+      "reboundDamping": 4000,
+      "antiRoll": 9000
+    }
+  },
+  "tyres": {
+    "front": {
+      "grip": 1.7,
+      "lateralB": 10,
+      "lateralC": 1.9,
+      "lateralE": 0.97,
+      "loadSensitivity": 0.08,
+      "slidingGrip": 0.8,
+      "rollingResistance": 0.012
+    },
+    "rear": {
+      "grip": 1.78,
+      "lateralB": 10,
+      "lateralC": 1.9,
+      "lateralE": 0.97,
+      "loadSensitivity": 0.08,
+      "slidingGrip": 0.8,
+      "rollingResistance": 0.012
+    }
+  },
+  "steering": {
+    "maxAngleDeg": 32,
+    "highSpeed": 45,
+    "minLockFactor": 0.3
+  },
+  "engine": {
+    "idleRpm": 900,
+    "redlineRpm": 7800,
+    "cylinders": 6,
+    "launchRpm": 3200,
+    "torqueCurve": [
+      [0, 153],
+      [1000, 180],
+      [2500, 248],
+      [4000, 292],
+      [5500, 306],
+      [6800, 284],
+      [7800, 243],
+      [8500, 202]
+    ],
+    "engineBraking": 70,
+    "throttleResponse": 0.25
+  },
+  "gearbox": {
+    "ratios": [2.6, 1.85, 1.42, 1.15, 0.99, 0.88],
+    "reverse": 3.0,
+    "finalDrive": 3.9,
+    "efficiency": 0.88,
+    "shiftTime": 0.18,
+    "upshiftAt": 0.93,
+    "downshiftAt": 0.5
+  },
+  "drivetrain": {
+    "layout": "RWD"
+  },
+  "brakes": {
+    "maxTorque": 9000,
+    "frontBias": 0.64,
+    "handbrakeTorque": 3000
+  },
+  "aero": {
+    "dragArea": 0.72,
+    "downforceArea": 3
+  },
+  "assists": {
+    "tractionControl": true,
+    "abs": true,
+    "stability": true
+  }
+}
