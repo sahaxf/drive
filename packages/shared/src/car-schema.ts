@@ -37,16 +37,27 @@ const tyre = z.object({
   rollingResistance: nonNegative,
 });
 
+/** Look a car model's material is drawn with. */
+export const modelMaterial = z.enum(['paint', 'glass', 'trim', 'chrome', 'rubber', 'headlight', 'brakeLight', 'reverseLight']);
+export type ModelMaterial = z.infer<typeof modelMaterial>;
+
 export const carSpecSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   /** Model file and node mapping; the placeholder car has no model. */
   visual: z
     .object({
+      /** OBJ file next to car.json, +Z forward and +Y up; scaled to fit the axles. */
       model: z.string().optional(),
       paintColor: z.string().default('#d01c1f'),
+      /** Model object holding each axle's pair of wheels; split into left and right. */
+      wheelNodes: z.object({ front: z.string(), rear: z.string() }).optional(),
+      /** Model objects to leave out. */
+      hiddenNodes: z.array(z.string()).default([]),
+      /** What each model material is drawn as; unlisted ones become dark trim. */
+      materials: z.record(z.string(), modelMaterial).default({}),
     })
-    .default({ paintColor: '#d01c1f' }),
+    .default({ paintColor: '#d01c1f', hiddenNodes: [], materials: {} }),
   chassis: z.object({
     mass: positive,
     /** Collision box half-extents. */

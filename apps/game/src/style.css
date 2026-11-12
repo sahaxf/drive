@@ -547,8 +547,15 @@ body {
   color: var(--hud-faint);
 }
 
-.home-setting {
+.home-settings {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
   margin-top: 26px;
+}
+
+.home-setting {
   padding: 8px 16px;
   font: inherit;
   font-size: 12px;

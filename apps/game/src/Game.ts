@@ -1,5 +1,5 @@
 import type { World } from '@dimforge/rapier3d-compat';
-import { Quaternion, Vector3 } from 'three';
+import { type Group, Quaternion, Vector3 } from 'three';
 import type { CarSpec } from '@drivee/shared';
 import { EngineSound } from './audio/EngineSound';
 import { CameraRig } from './camera/CameraRig';
@@ -11,6 +11,7 @@ import { KeyboardInput } from './input/KeyboardInput';
 import { PhoneInput } from './input/PhoneInput';
 import { createWorld, initPhysics, PHYSICS_DT } from './physics/PhysicsWorld';
 import { LapTimer } from './race/LapTimer';
+import { loadCarModel } from './render/carModel';
 import { CarView } from './render/CarView';
 import { Renderer } from './render/Renderer';
 import { buildTrackScene } from './render/track/buildTrackScene';
@@ -27,7 +28,6 @@ import { Hud } from './ui/Hud';
 import { PairingPanel } from './ui/PairingPanel';
 import { Vehicle } from './vehicle/Vehicle';
 
-const CAR_ID = 'strada-gt';
 /** Further than this from the centreline, lap progress isn't tracked (the clock still runs). */
 const LAP_TRACK_RANGE = 40;
 /** Height above the road surface the car is dropped from on spawn/reset. */
@@ -67,9 +67,14 @@ export class Game {
     viewport: HTMLElement,
     hudRoot: HTMLElement,
     trackId: string,
+    carId: string,
     onProgress: (label: string) => void = () => {},
   ): Promise<Game> {
-    const [, car, trackSpec] = await Promise.all([initPhysics(), loadCarSpec(CAR_ID), loadTrackSpec(trackId)]);
+    const [, [car, carModel], trackSpec] = await Promise.all([
+      initPhysics(),
+      loadCarSpec(carId).then(async (spec) => [spec, await loadCarModel(spec)] as const),
+      loadTrackSpec(trackId),
+    ]);
     const t0 = performance.now();
     const track = await generateTrack(trackSpec, async (step) => {
       onProgress(STEP_LABELS[step]);
@@ -79,7 +84,7 @@ export class Game {
     onProgress(STEP_LABELS.scene);
     await nextFrame();
     const t2 = performance.now();
-    const game = new Game(viewport, hudRoot, car, track);
+    const game = new Game(viewport, hudRoot, car, carModel, track);
     console.info(
       `[drivee] ${track.spec.meta.name}: ${(track.spline.length / 1000).toFixed(2)} km, ${track.forest.count} trees; ` +
         `generated in ${(t1 - t0).toFixed(0)} ms, scene built in ${(performance.now() - t2).toFixed(0)} ms`,
@@ -105,6 +110,7 @@ export class Game {
     viewport: HTMLElement,
     hudRoot: HTMLElement,
     private readonly spec: CarSpec,
+    carModel: Group | null,
     private readonly track: GeneratedTrack,
   ) {
     this.world = createWorld();
@@ -115,9 +121,9 @@ export class Game {
     const env = track.spec.environment;
     this.renderer.setFog(env.fogNear, env.fogFar);
     this.renderer.scene.add(buildTrackScene(track, this.renderer.maxAnisotropy));
-    this.carView = new CarView(spec);
+    this.carView = new CarView(spec, carModel);
     this.renderer.scene.add(this.carView.root);
-    this.cameraRig = new CameraRig(this.renderer.camera);
+    this.cameraRig = new CameraRig(this.renderer.camera, spec.chassis.halfExtents[2]);
 
     this.phone = new PhoneInput();
     this.phone.connect();
