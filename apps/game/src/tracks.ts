@@ -2,11 +2,21 @@ import { parseCarSpec, parseTrackSpec, type CarSpec, type TrackSpec } from '@dri
 
 /** Tracks are folders under public/tracks/, listed in public/tracks/index.json. */
 export async function loadTrackIndex(): Promise<string[]> {
-  const index = (await loadJson('/tracks/index.json', 'track list')) as { tracks?: unknown };
-  if (!Array.isArray(index.tracks) || !index.tracks.every((t) => typeof t === 'string')) {
-    throw new Error('tracks/index.json must contain { "tracks": ["id", ...] }');
+  return loadIndex('tracks');
+}
+
+/** Cars are folders under public/cars/, listed in public/cars/index.json. */
+export async function loadCarIndex(): Promise<string[]> {
+  return loadIndex('cars');
+}
+
+async function loadIndex(kind: 'tracks' | 'cars'): Promise<string[]> {
+  const index = (await loadJson(`/${kind}/index.json`, `${kind.slice(0, -1)} list`)) as Record<string, unknown>;
+  const ids = index[kind];
+  if (!Array.isArray(ids) || !ids.every((t) => typeof t === 'string')) {
+    throw new Error(`${kind}/index.json must contain { "${kind}": ["id", ...] }`);
   }
-  return index.tracks;
+  return ids;
 }
 
 export async function loadTrackSpec(id: string): Promise<TrackSpec> {

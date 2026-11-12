@@ -28,7 +28,6 @@ import { Hud } from './ui/Hud';
 import { PairingPanel } from './ui/PairingPanel';
 import { Vehicle } from './vehicle/Vehicle';
 
-const CAR_ID = 'strada-gt';
 /** Further than this from the centreline, lap progress isn't tracked (the clock still runs). */
 const LAP_TRACK_RANGE = 40;
 /** Height above the road surface the car is dropped from on spawn/reset. */
@@ -68,11 +67,12 @@ export class Game {
     viewport: HTMLElement,
     hudRoot: HTMLElement,
     trackId: string,
+    carId: string,
     onProgress: (label: string) => void = () => {},
   ): Promise<Game> {
     const [, [car, carModel], trackSpec] = await Promise.all([
       initPhysics(),
-      loadCarSpec(CAR_ID).then(async (spec) => [spec, await loadCarModel(spec)] as const),
+      loadCarSpec(carId).then(async (spec) => [spec, await loadCarModel(spec)] as const),
       loadTrackSpec(trackId),
     ]);
     const t0 = performance.now();
@@ -123,7 +123,7 @@ export class Game {
     this.renderer.scene.add(buildTrackScene(track, this.renderer.maxAnisotropy));
     this.carView = new CarView(spec, carModel);
     this.renderer.scene.add(this.carView.root);
-    this.cameraRig = new CameraRig(this.renderer.camera);
+    this.cameraRig = new CameraRig(this.renderer.camera, spec.chassis.halfExtents[2]);
 
     this.phone = new PhoneInput();
     this.phone.connect();

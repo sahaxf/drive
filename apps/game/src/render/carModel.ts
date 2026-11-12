@@ -1,4 +1,5 @@
 import { Box3, BufferGeometry, Float32BufferAttribute, Group, type Material, Mesh, type Object3D, Vector3 } from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import type { CarSpec, ModelMaterial } from '@drivee/shared';
 import type { WheelId } from '../vehicle/Vehicle';
@@ -6,24 +7,37 @@ import type { WheelId } from '../vehicle/Vehicle';
 /** A car's model, fitted to its spec: the body in car space, and wheels centred on their hubs. */
 export interface CarModel {
   body: Group;
-  wheels: Record<WheelId, Mesh>;
+  wheels: Record<WheelId, Group>;
   /** Where each wheel's centre sits across the car in the model, to line up with its arch. */
   wheelX: Record<WheelId, number>;
 }
 
-/** Fetches and parses the car's OBJ, or resolves to null for a car without one. */
+/** Fetches and parses the car's OBJ or glTF model, or resolves to null for a car without one. */
 export async function loadCarModel(spec: CarSpec): Promise<Group | null> {
   if (!spec.visual.model) return null;
-  const url = `/cars/${spec.id}/${spec.visual.model}`;
+  const folder = `/cars/${spec.id}/`;
+  const url = folder + spec.visual.model;
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Could not load the model for car "${spec.id}" (${url}: ${response.status})`);
+  if (/\.(glb|gltf)$/i.test(spec.visual.model)) {
+    return (await new GLTFLoader().parseAsync(await response.arrayBuffer(), folder)).scene;
+  }
   return new OBJLoader().parse(await response.text());
+}
+
+type WheelCut = NonNullable<CarSpec['visual']['wheelCuts']>['front'];
+
+/** The triangles of one axle's wheels, both sides together, and the axle's centre. */
+interface Axle {
+  pieces: Mesh[];
+  centre: Vector3;
 }
 
 /**
  * Scales and places a parsed model so its axles line up with the spec's, with the wheels
- * touching the ground when the car is at rest at `hubY`. Each axle's wheel pair is split
- * into left and right meshes centred on their own hub, so they can steer and spin.
+ * touching the ground when the car is at rest at `hubY`. Each axle's wheels, whether a
+ * mesh of their own or cut out of the body, are split into left and right groups centred
+ * on their own hub, so they can steer and spin.
  */
 export function fitCarModel(
   spec: CarSpec,
@@ -31,70 +45,105 @@ export function fitCarModel(
   hubY: number,
   materials: Record<ModelMaterial, Material>,
 ): CarModel {
-  const { wheelNodes, hiddenNodes } = spec.visual;
-  if (!wheelNodes) throw new Error(`Car "${spec.id}" has a model but no visual.wheelNodes`);
-  const front = findMesh(source, wheelNodes.front);
-  const rear = findMesh(source, wheelNodes.rear);
-  const frontCentre = new Box3().setFromObject(front).getCenter(new Vector3());
-  const rearCentre = new Box3().setFromObject(rear).getCenter(new Vector3());
-
-  const scale = (spec.wheels.frontAxleZ - spec.wheels.rearAxleZ) / (frontCentre.z - rearCentre.z);
-  const wheelY = (frontCentre.y + rearCentre.y) / 2;
-  const offset = new Vector3(0, hubY - wheelY * scale, spec.wheels.frontAxleZ - frontCentre.z * scale);
-
-  for (const mesh of meshes(source)) {
-    const named = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-    const looks = named.map((m) => materials[spec.visual.materials[m.name] ?? 'trim']);
+  const { wheelNodes, wheelCuts, hiddenNodes } = spec.visual;
+  let parts = bake(source, (spec.visual.modelYawDeg * Math.PI) / 180).filter((m) => !hiddenNodes.includes(m.name));
+  for (const mesh of parts) {
+    const own = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    const looks = own.map((m) => {
+      const look = spec.visual.materials[m.name] ?? spec.visual.defaultMaterial;
+      return look === 'model' ? m : materials[look];
+    });
     mesh.material = Array.isArray(mesh.material) ? looks : looks[0]!;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
   }
 
-  const wheels = {} as Record<WheelId, Mesh>;
+  let front: Axle;
+  let rear: Axle;
+  if (wheelNodes) {
+    const take = (name: string): Axle => {
+      const mesh = parts.find((m) => m.name === name);
+      if (!mesh) throw new Error(`Car model has no mesh named "${name}"`);
+      parts = parts.filter((m) => m !== mesh);
+      return { pieces: [mesh], centre: new Box3().setFromObject(mesh).getCenter(new Vector3()) };
+    };
+    front = take(wheelNodes.front);
+    rear = take(wheelNodes.rear);
+  } else if (wheelCuts) {
+    const cut = (c: WheelCut): Axle => {
+      const pieces: Mesh[] = [];
+      parts = parts.map((mesh) => {
+        const [wheel, rest] = partition(mesh.geometry, (x, y, z) => Math.abs(x) >= c.innerX && Math.hypot(z - c.z, y - c.y) <= c.radius);
+        if (wheel.getAttribute('position').count > 0) pieces.push(new Mesh(wheel, mesh.material));
+        return Object.assign(new Mesh(rest, mesh.material), { name: mesh.name });
+      });
+      return { pieces, centre: new Vector3(0, c.y, c.z) };
+    };
+    front = cut(wheelCuts.front);
+    rear = cut(wheelCuts.rear);
+  } else {
+    throw new Error(`Car "${spec.id}" has a model but neither visual.wheelNodes nor visual.wheelCuts`);
+  }
+
+  const scale = (spec.wheels.frontAxleZ - spec.wheels.rearAxleZ) / (front.centre.z - rear.centre.z);
+  const wheelY = (front.centre.y + rear.centre.y) / 2;
+  const offset = new Vector3(0, hubY - wheelY * scale, spec.wheels.frontAxleZ - front.centre.z * scale);
+
+  const wheels = {} as Record<WheelId, Group>;
   const wheelX = {} as Record<WheelId, number>;
-  for (const [axle, mesh] of [['F', front], ['R', rear]] as const) {
-    const [left, right] = splitAcrossX(mesh.geometry);
-    for (const [side, geometry] of [['L', left], ['R', right]] as const) {
-      // The hub sits at the wheel's centre; the spec's axle line and the hub height
-      // place it, so only its position across the car comes from the model.
-      geometry.scale(scale, scale, scale);
-      const centre = new Box3().setFromBufferAttribute(geometry.getAttribute('position') as Float32BufferAttribute).getCenter(new Vector3());
-      geometry.translate(-centre.x, -centre.y, -centre.z);
-      const id = `${axle}${side}` as WheelId;
-      wheels[id] = Object.assign(new Mesh(geometry, mesh.material), { castShadow: true, receiveShadow: true });
-      wheelX[id] = centre.x;
+  for (const [letter, axle] of [['F', front], ['R', rear]] as const) {
+    for (const [side, left] of [['L', true], ['R', false]] as const) {
+      const id = `${letter}${side}` as WheelId;
+      const meshes = axle.pieces
+        .map((piece) => new Mesh(partition(piece.geometry, (x) => (x >= 0) === left)[0], piece.material))
+        .filter((mesh) => mesh.geometry.getAttribute('position').count > 0);
+      const bounds = new Box3();
+      for (const mesh of meshes) bounds.expandByObject(mesh);
+      // Centre the wheel on its hub: across the car where the model has it, and on the
+      // axle's line and height so both wheels of an axle turn about the same point.
+      const centre = new Vector3(bounds.getCenter(new Vector3()).x, axle.centre.y, axle.centre.z);
+      const wheel = new Group();
+      for (const mesh of meshes) {
+        mesh.geometry.translate(-centre.x, -centre.y, -centre.z).scale(scale, scale, scale);
+        wheel.add(shadowed(mesh));
+      }
+      wheels[id] = wheel;
+      wheelX[id] = centre.x * scale;
     }
   }
 
   const body = new Group();
-  for (const child of [...source.children]) {
-    if (child === front || child === rear || hiddenNodes.includes(child.name)) continue;
-    body.add(child);
-  }
+  for (const mesh of parts) body.add(shadowed(mesh));
   body.scale.setScalar(scale);
   body.position.copy(offset);
   return { body, wheels, wheelX };
 }
 
-function findMesh(root: Object3D, name: string): Mesh {
-  const found = root.getObjectByName(name);
-  if (!(found instanceof Mesh)) throw new Error(`Car model has no mesh named "${name}"`);
-  return found;
-}
-
-function meshes(root: Object3D): Mesh[] {
+/**
+ * Flattens a parsed model into meshes whose geometry is in model space, turned by `yaw`
+ * about +Y, and non-indexed so it can be cut up by triangle.
+ */
+function bake(source: Group, yaw: number): Mesh[] {
+  source.rotation.y = yaw;
+  source.updateMatrixWorld(true);
   const found: Mesh[] = [];
-  root.traverse((o) => {
-    if (o instanceof Mesh) found.push(o);
+  source.traverse((o: Object3D) => {
+    if (!(o instanceof Mesh)) return;
+    const geometry = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(o.matrixWorld);
+    found.push(Object.assign(new Mesh(geometry, o.material), { name: o.name }));
   });
   return found;
 }
 
+function shadowed(mesh: Mesh): Mesh {
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
 /**
- * Splits a non-indexed geometry into the triangles left (+X) and right of the centre
- * line, keeping its material groups.
+ * Splits a non-indexed geometry into the triangles whose centroid passes `test` and the
+ * rest, keeping its material groups.
  */
-function splitAcrossX(geometry: BufferGeometry): [BufferGeometry, BufferGeometry] {
+function partition(geometry: BufferGeometry, test: (x: number, y: number, z: number) => boolean): [BufferGeometry, BufferGeometry] {
   const names = Object.keys(geometry.attributes);
   const sides = [0, 1].map(() => ({ data: names.map(() => [] as number[]), vertices: 0, geometry: new BufferGeometry() }));
   const position = geometry.getAttribute('position');
@@ -102,8 +151,10 @@ function splitAcrossX(geometry: BufferGeometry): [BufferGeometry, BufferGeometry
   for (const group of groups) {
     const starts = sides.map((s) => s.vertices);
     for (let v = group.start; v < group.start + group.count; v += 3) {
-      const x = position.getX(v) + position.getX(v + 1) + position.getX(v + 2);
-      const side = sides[x >= 0 ? 0 : 1]!;
+      const x = (position.getX(v) + position.getX(v + 1) + position.getX(v + 2)) / 3;
+      const y = (position.getY(v) + position.getY(v + 1) + position.getY(v + 2)) / 3;
+      const z = (position.getZ(v) + position.getZ(v + 1) + position.getZ(v + 2)) / 3;
+      const side = sides[test(x, y, z) ? 0 : 1]!;
       names.forEach((name, n) => {
         const attribute = geometry.getAttribute(name);
         for (let k = v; k < v + 3; k++) {

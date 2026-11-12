@@ -4,6 +4,8 @@ export type CameraMode = 'chase' | 'hood';
 const MODES: CameraMode[] = ['chase', 'hood'];
 
 const CHASE = { distance: 4.6, height: 1.35, lookAhead: 4, lookHeight: 1.0, yawRate: 4.5, heightRate: 9 };
+/** Half the length of the car `CHASE.distance` was tuned for; longer cars sit further back. */
+const REFERENCE_HALF_LENGTH = 2.2;
 /**
  * Pull-away stretch: the camera drops back as the car gets going, up to `max` metres,
  * then holds that distance at any speed. `speed` (m/s) sets how quickly it saturates:
@@ -23,7 +25,15 @@ export class CameraRig {
   private readonly tmp = new Vector3();
   private initialised = false;
 
-  constructor(private readonly camera: PerspectiveCamera) {}
+  /** Extra chase distance so a longer car is framed like the reference one. */
+  private readonly extraDistance: number;
+
+  constructor(
+    private readonly camera: PerspectiveCamera,
+    carHalfLength = REFERENCE_HALF_LENGTH,
+  ) {
+    this.extraDistance = Math.max(0, carHalfLength - REFERENCE_HALF_LENGTH);
+  }
 
   cycle(): void {
     this.mode = MODES[(MODES.indexOf(this.mode) + 1) % MODES.length]!;
@@ -64,7 +74,7 @@ export class CameraRig {
     // lag; height is eased to soak up bumps and crests.
     const targetLag = LAG.max * (1 - Math.exp(-speed / LAG.speed));
     this.lag = MathUtils.damp(this.lag, targetLag, LAG.rate, dt);
-    const distance = CHASE.distance + this.lag;
+    const distance = CHASE.distance + this.extraDistance + this.lag;
     const desiredY = carPosition.y + CHASE.height;
     this.position.set(
       carPosition.x - Math.sin(this.yaw) * distance,
