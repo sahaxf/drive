@@ -23,7 +23,7 @@ import {
   type GenerationStep,
 } from './track/generateTrack';
 import { loadSettings, nextShadowQuality, saveSettings } from './settings';
-import { loadBestLap, loadCarSpec, loadTrackSpec, saveBestLap } from './tracks';
+import { loadCarSpec, loadTrackSpec } from './tracks';
 import { Hud } from './ui/Hud';
 import { PairingPanel } from './ui/PairingPanel';
 import { Vehicle } from './vehicle/Vehicle';
@@ -43,6 +43,14 @@ const STEP_LABELS: Record<GenerationStep | 'scene', string> = {
   forest: 'Planting forest…',
   scene: 'Preparing scene…',
 };
+
+export interface GameOptions {
+  /** The player's best lap on this track so far, s. */
+  best?: number | null;
+  /** Called with the time of each completed lap, s. */
+  onLap?: (seconds: number) => void;
+  onProgress?: (label: string) => void;
+}
 
 export class Game {
   private readonly loop: GameLoop;
@@ -68,7 +76,7 @@ export class Game {
     hudRoot: HTMLElement,
     trackId: string,
     carId: string,
-    onProgress: (label: string) => void = () => {},
+    { best = null, onLap = () => {}, onProgress = () => {} }: GameOptions = {},
   ): Promise<Game> {
     const [, [car, carModel], trackSpec] = await Promise.all([
       initPhysics(),
@@ -84,7 +92,7 @@ export class Game {
     onProgress(STEP_LABELS.scene);
     await nextFrame();
     const t2 = performance.now();
-    const game = new Game(viewport, hudRoot, car, carModel, track);
+    const game = new Game(viewport, hudRoot, car, carModel, track, best, onLap);
     console.info(
       `[drivee] ${track.spec.meta.name}: ${(track.spline.length / 1000).toFixed(2)} km, ${track.forest.count} trees; ` +
         `generated in ${(t1 - t0).toFixed(0)} ms, scene built in ${(performance.now() - t2).toFixed(0)} ms`,
@@ -112,6 +120,8 @@ export class Game {
     private readonly spec: CarSpec,
     carModel: Group | null,
     private readonly track: GeneratedTrack,
+    best: number | null,
+    private readonly onLap: (seconds: number) => void,
   ) {
     this.world = createWorld();
     this.vehicle = new Vehicle(this.world, spec, new Vector3());
@@ -129,10 +139,10 @@ export class Game {
     this.phone.connect();
     this.input = new InputSystem([new KeyboardInput(), new GamepadInput(), this.phone]);
     this.hud = new Hud(hudRoot);
-    // Back to the home screen, only from the pause screen so it can't happen by accident.
+    // Back to track selection, only from the pause screen so it can't happen by accident.
     window.addEventListener('keydown', (e) => {
       if (!this.paused || e.repeat) return;
-      if (e.code === 'KeyQ') location.href = location.pathname;
+      if (e.code === 'KeyQ') location.search = '?play';
       if (e.code === 'KeyG') {
         this.settings.shadows = nextShadowQuality(this.settings.shadows);
         this.renderer.setShadowQuality(this.settings.shadows);
@@ -143,7 +153,7 @@ export class Game {
         saveSettings(this.settings);
       }
     });
-    this.lapTimer = new LapTimer(track.spline.length, track.spec.race.startDistance, loadBestLap(track.spec.meta.id));
+    this.lapTimer = new LapTimer(track.spline.length, track.spec.race.startDistance, best);
     this.pairing = new PairingPanel(hudRoot);
     this.engineSound = EngineSound.create(spec.engine);
 
@@ -243,7 +253,7 @@ export class Game {
     if (event?.kind !== 'lap') return;
     // The lap just completed is one less than the lap now running.
     this.hud.showLap(this.lapTimer.lap - 1, event.time, event.best);
-    if (event.best) saveBestLap(this.track.spec.meta.id, event.time);
+    this.onLap(event.time);
   }
 
   private updateHaptics(dt: number): void {

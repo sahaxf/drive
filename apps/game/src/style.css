@@ -574,3 +574,346 @@ body {
   color: var(--hud-dim);
   margin-right: 8px;
 }
+
+.home-top {
+  position: absolute;
+  top: 20px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  color: var(--hud-dim);
+}
+
+.home-back {
+  padding: 6px 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.home-back:hover {
+  color: var(--hud-fg);
+}
+
+/* --- Title screen: track still, car, account --- */
+
+.title {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 60% 40%, #1d232d 0%, #0b0d12 75%);
+  letter-spacing: 0.14em;
+  font-variant-numeric: tabular-nums;
+}
+
+.title-backdrop {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+}
+
+.title.ready .title-backdrop {
+  opacity: 1;
+}
+
+.title-shot {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  pointer-events: none;
+  user-select: none;
+  transform: scale(1.08);
+  /* Fades out quickly but keeps drifting, so the next one fades in over movement. */
+  transition:
+    opacity 1.6s ease,
+    transform 9s linear;
+}
+
+.title-shot.active {
+  opacity: 1;
+  transform: scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title-shot,
+  .title-shot.active {
+    transform: none;
+  }
+}
+
+.title-dots {
+  position: absolute;
+  right: 28px;
+  bottom: 24px;
+  display: none;
+  gap: 10px;
+}
+
+.title.many .title-dots {
+  display: flex;
+}
+
+.title-dot {
+  width: 22px;
+  height: 3px;
+  padding: 0;
+  background: var(--hud-line);
+  border: none;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.title-dot.active {
+  background: var(--hud-fg);
+}
+
+.title-shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(6, 8, 12, 0.88) 0%, rgba(6, 8, 12, 0.55) 34%, rgba(6, 8, 12, 0) 62%),
+    linear-gradient(0deg, rgba(6, 8, 12, 0.75) 0%, rgba(6, 8, 12, 0) 40%);
+}
+
+.title-side {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px clamp(20px, 6vw, 72px);
+  overflow-y: auto;
+}
+
+.title-brand {
+  font-size: clamp(36px, 5vw, 56px);
+  font-weight: 200;
+  letter-spacing: 0.5em;
+  text-transform: uppercase;
+}
+
+.title-caption {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--hud-faint);
+  margin-bottom: 36px;
+}
+
+.title-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.title-tabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--hud-line);
+}
+
+.title-tabs button {
+  padding: 0 0 10px;
+  margin-bottom: -1px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--hud-faint);
+  background: none;
+  border: none;
+  border-bottom: 1px solid transparent;
+  cursor: pointer;
+}
+
+.title-tabs button[aria-selected='true'] {
+  color: var(--hud-fg);
+  border-bottom-color: var(--hud-fg);
+}
+
+.title-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.title-form.busy {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.title-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.title-form label span,
+.title-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--hud-dim);
+}
+
+.title-form input {
+  padding: 11px 12px;
+  font: inherit;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  color: var(--hud-fg);
+  background: rgba(8, 10, 14, 0.55);
+  border: 1px solid var(--hud-line);
+  border-radius: 0;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.title-form input:focus {
+  border-color: rgba(255, 255, 255, 0.75);
+}
+
+.title-error {
+  min-height: 1.3em;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--hud-hot);
+}
+
+.title-error:empty {
+  min-height: 0;
+  margin-top: -14px;
+}
+
+.title-primary {
+  padding: 13px 20px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: #0b0d12;
+  background: var(--hud-fg);
+  border: 1px solid var(--hud-fg);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.title-primary:hover,
+.title-primary:focus-visible {
+  color: var(--hud-fg);
+  background: transparent;
+  outline: none;
+}
+
+.title-play {
+  padding: 18px 20px;
+  font-size: 16px;
+  letter-spacing: 0.5em;
+}
+
+.title-hint {
+  font-size: 10px;
+  line-height: 1.6;
+  letter-spacing: 0.08em;
+  color: var(--hud-faint);
+}
+
+.title-user {
+  margin-top: 6px;
+  font-size: 24px;
+  font-weight: 300;
+  letter-spacing: 0.06em;
+  overflow-wrap: anywhere;
+}
+
+.title-stats {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+  margin: 4px 0 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hud-line);
+  font-size: 13px;
+}
+
+.title-stats dt {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--hud-dim);
+}
+
+.title-stats dd {
+  margin: 0;
+  text-align: right;
+}
+
+.title-stats dd.best {
+  color: var(--hud-best);
+}
+
+.title-link {
+  align-self: flex-start;
+  padding: 4px 0;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--hud-faint);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.title-link:hover {
+  color: var(--hud-fg);
+}
+
+.title-status {
+  position: absolute;
+  right: 28px;
+  bottom: 44px;
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--hud-faint);
+  animation: title-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes title-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (max-width: 760px) {
+  .title-side {
+    width: 100%;
+  }
+}

@@ -1,11 +1,12 @@
 import type { CarSpec, TrackSpec } from '@drivee/shared';
 import { formatLapTime } from '../race/LapTimer';
 import { loadSettings, nextShadowQuality, saveSettings } from '../settings';
-import { loadBestLap, trackStats } from '../tracks';
+import { trackStats } from '../tracks';
 import { minimapPath, minimapPoint } from './minimap';
 
 // Standard Gamepad API buttons (same mapping as GamepadInput).
 const BTN_A = 0;
+const BTN_B = 1;
 const BTN_X = 2;
 const BTN_Y = 3;
 const BTN_DPAD_LEFT = 14;
@@ -14,10 +15,20 @@ const STICK_THRESHOLD = 0.6;
 const LAST_TRACK_KEY = 'drivee.lastTrack';
 const LAST_CAR_KEY = 'drivee.lastCar';
 
+/** The track and car picked last time, or the first of each. */
+export function lastChoice(trackIds: string[], carIds: string[]): { track: string; car: string } {
+  const track = safeGet(LAST_TRACK_KEY);
+  const car = safeGet(LAST_CAR_KEY);
+  return {
+    track: trackIds.find((id) => id === track) ?? trackIds[0]!,
+    car: carIds.find((id) => id === car) ?? carIds[0]!,
+  };
+}
+
 /**
- * Track selection: one card per track with a map, length, elevation and best lap, plus
- * the car to drive. Mouse, keyboard (← → Enter, C for the car) and gamepad (D-pad /
- * stick, A, X for the car) all work.
+ * Track selection: one card per track with a map, length, elevation and the player's best
+ * lap, plus the car to drive. Mouse, keyboard (← → Enter, C for the car, Esc back) and
+ * gamepad (D-pad / stick, A, X for the car, B back) all work.
  */
 export class HomeScreen {
   private readonly root: HTMLElement;
@@ -34,11 +45,18 @@ export class HomeScreen {
     parent: HTMLElement,
     private readonly tracks: TrackSpec[],
     private readonly cars: CarSpec[],
+    /** The player's best lap per track id, s. */
+    private readonly bests: Record<string, number>,
+    username: string,
     private readonly onChoose: (trackId: string, carId: string) => void,
   ) {
     this.root = document.createElement('div');
     this.root.className = 'home';
     this.root.innerHTML = `
+      <nav class="home-top">
+        <button type="button" class="home-back" data-el="back">◂ Back</button>
+        <span class="home-user" data-el="user"></span>
+      </nav>
       <header class="home-title">Drivee</header>
       <div class="home-label">Choose a track</div>
       <div class="home-cards"></div>
@@ -46,8 +64,10 @@ export class HomeScreen {
         <button type="button" class="home-setting" data-el="car-button"><span class="home-setting-label">Car</span> ◂ <span data-el="car"></span> ▸</button>
         <button type="button" class="home-setting" data-el="shadows-button"><span class="home-setting-label">Shadows</span> ◂ <span data-el="shadows"></span> ▸</button>
       </div>
-      <footer class="home-hint">← → Select · Enter Drive · C Car · G Shadows</footer>
+      <footer class="home-hint">← → Select · Enter Drive · C Car · G Shadows · Esc Back</footer>
     `;
+    this.root.querySelector('[data-el="user"]')!.textContent = username;
+    this.root.querySelector('[data-el="back"]')!.addEventListener('click', () => this.back());
     const list = this.root.querySelector('.home-cards')!;
     tracks.forEach((spec, i) => {
       const card = this.card(spec);
@@ -74,7 +94,7 @@ export class HomeScreen {
   private card(spec: TrackSpec): HTMLElement {
     const points = spec.centreline.points.map((c) => c.p);
     const { length, elevationRange } = trackStats(spec);
-    const best = loadBestLap(spec.meta.id);
+    const best = this.bests[spec.meta.id] ?? null;
     const startPoint = points[nearestControlPoint(spec)]!;
     const [sx, sy] = minimapPoint(points, startPoint);
 
@@ -116,6 +136,13 @@ export class HomeScreen {
     this.onChoose(id, carId);
   }
 
+  private back(): void {
+    if (!this.running) return;
+    this.running = false;
+    window.removeEventListener('keydown', this.onKey);
+    location.href = location.pathname;
+  }
+
   private cycleCar(): void {
     this.car = (this.car + 1) % this.cars.length;
     this.showCar();
@@ -135,6 +162,7 @@ export class HomeScreen {
   private readonly onKey = (e: KeyboardEvent): void => {
     if (e.code === 'KeyG' && !e.repeat) this.cycleShadows();
     if (e.code === 'KeyC' && !e.repeat) this.cycleCar();
+    if (e.code === 'Escape' && !e.repeat) this.back();
     if (e.code === 'ArrowRight' || e.code === 'KeyD') this.select(this.selected + 1);
     else if (e.code === 'ArrowLeft' || e.code === 'KeyA') this.select(this.selected - 1);
     else if (e.code === 'Enter' || e.code === 'Space') {
@@ -152,6 +180,7 @@ export class HomeScreen {
         left: (pad.buttons[BTN_DPAD_LEFT]?.pressed ?? false) || x < -STICK_THRESHOLD,
         right: (pad.buttons[BTN_DPAD_RIGHT]?.pressed ?? false) || x > STICK_THRESHOLD,
         a: pad.buttons[BTN_A]?.pressed ?? false,
+        b: pad.buttons[BTN_B]?.pressed ?? false,
         x: pad.buttons[BTN_X]?.pressed ?? false,
         y: pad.buttons[BTN_Y]?.pressed ?? false,
       };
@@ -160,6 +189,7 @@ export class HomeScreen {
       if (edge('left')) this.select(this.selected - 1);
       if (edge('right')) this.select(this.selected + 1);
       if (edge('a')) this.choose(this.selected);
+      if (edge('b')) this.back();
       if (edge('x')) this.cycleCar();
       if (edge('y')) this.cycleShadows();
       this.padHeld = new Set(Object.entries(pressed).filter(([, v]) => v).map(([k]) => k));

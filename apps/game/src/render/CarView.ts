@@ -127,7 +127,13 @@ export class CarView {
     for (const id of WHEEL_IDS) this.wheels.set(id, this.buildWheel(id));
   }
 
-  update(position: Vector3, rotation: Quaternion, wheels: readonly WheelState[], braking: boolean, reversing: boolean): void {
+  update(
+    position: Vector3,
+    rotation: Quaternion,
+    wheels: readonly Pick<WheelState, 'id' | 'mount' | 'length' | 'steerAngle' | 'spinAngle'>[],
+    braking: boolean,
+    reversing: boolean,
+  ): void {
     this.root.position.copy(position);
     this.root.quaternion.copy(rotation);
     for (const w of wheels) {
@@ -207,7 +213,7 @@ export class CarView {
 }
 
 /** Where a wheel hub sits with the car at rest, sagged under its share of the weight. */
-function restHubY(spec: CarSpec, front: boolean): number {
+export function restHubY(spec: CarSpec, front: boolean): number {
   const { frontAxleZ, rearAxleZ, mountY } = spec.wheels;
   const frontShare = (spec.chassis.centerOfMass[2] - rearAxleZ) / (frontAxleZ - rearAxleZ);
   const suspension = front ? spec.suspension.front : spec.suspension.rear;
