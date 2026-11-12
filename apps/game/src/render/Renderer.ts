@@ -46,6 +46,7 @@ export class Renderer {
   private readonly sun = new DirectionalLight(LIGHTING.sunColour, LIGHTING.sunIntensity);
   private readonly sunDirection = new Vector3();
   private sky!: Sky;
+  private readonly onResize = () => this.resize();
 
   constructor(
     private readonly container: HTMLElement,
@@ -64,7 +65,7 @@ export class Renderer {
     this.scene.fog = new Fog(LIGHTING.fogColour, 500, 7500);
 
     this.resize();
-    window.addEventListener('resize', () => this.resize());
+    window.addEventListener('resize', this.onResize);
   }
 
   get maxAnisotropy(): number {
@@ -100,6 +101,14 @@ export class Renderer {
       this.sun.shadow.map?.dispose();
       this.sun.shadow.map = null;
     }
+  }
+
+  /** Free the GPU context and stop following the window size. */
+  dispose(): void {
+    window.removeEventListener('resize', this.onResize);
+    this.webgl.dispose();
+    this.webgl.forceContextLoss();
+    this.webgl.domElement.remove();
   }
 
   render(): void {

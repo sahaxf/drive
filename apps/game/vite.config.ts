@@ -3,13 +3,16 @@ import basicSsl from '@vitejs/plugin-basic-ssl';
 import { defineConfig, type ProxyOptions } from 'vite';
 // Relative path, not '@drivee/shared': Vite bundles relative imports into the config but
 // hands package imports to Node, which can't load the shared package's TypeScript.
+import { API_PATH } from '../../packages/shared/src/account';
 import { SIGNAL_PATH } from '../../packages/shared/src/controller';
 
-// The FastAPI signalling server (apps/signaling). Proxied rather than called directly so
+// The FastAPI server (apps/signaling): signalling and player accounts. Proxied rather than called directly so
 // the pages reach it on their own origin and HTTPS certificate: a phone only has to accept
 // one self-signed certificate, and there is no mixed content or CORS to deal with.
+const serverUrl = process.env['SIGNAL_URL'] ?? 'http://127.0.0.1:8000';
 const signalProxy: Record<string, ProxyOptions> = {
-  [SIGNAL_PATH]: { target: process.env['SIGNAL_URL'] ?? 'http://127.0.0.1:8000' },
+  [SIGNAL_PATH]: { target: serverUrl },
+  [API_PATH]: { target: serverUrl },
 };
 
 export default defineConfig({

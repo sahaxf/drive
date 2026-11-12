@@ -1,8 +1,7 @@
 import './style.css';
 import { Mesh, MeshStandardMaterial, PlaneGeometry, Quaternion, Vector3 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { CarView } from './render/CarView';
-import { restGroundY, restHubY } from './render/car/coupe';
+import { CarView, restHubY } from './render/CarView';
 import { Renderer } from './render/Renderer';
 import { loadCarSpec } from './tracks';
 
@@ -32,7 +31,8 @@ async function preview(): Promise<void> {
 
   const car = new CarView(spec);
   renderer.scene.add(car.root);
-  const position = new Vector3(0, -restGroundY(spec), 0);
+  // Body height that puts the tyres on the ground at rest.
+  const position = new Vector3(0, spec.wheels.radius - (restHubY(spec, true) + restHubY(spec, false)) / 2, 0);
   renderer.setShadowFocus(position);
 
   const viewName = new URLSearchParams(location.search).get('view') ?? '';

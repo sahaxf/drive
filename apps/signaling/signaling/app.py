@@ -1,5 +1,5 @@
 """
-HTTP API for pairing the game with a phone and passing their WebRTC signalling.
+HTTP API for player accounts (see `accounts`) and for pairing the game with a phone and passing their WebRTC signalling.
 
 The game and the phone page reach it through the Vite server's `/signal` proxy, so it
 shares their origin and HTTPS certificate. Each side joins a room, long-polls
@@ -13,6 +13,7 @@ from collections.abc import AsyncIterator, Callable
 
 from fastapi import FastAPI, HTTPException, Query, Response
 
+from .accounts import create_router
 from .network import lan_addresses
 from .protocol import (
     HostJoinRequest,
@@ -25,6 +26,7 @@ from .protocol import (
     is_room_code,
 )
 from .store import MemoryRoomStore, RoomStore
+from .users import UserStore
 
 # Long enough to keep requests rare, short enough for proxies not to give up on them.
 POLL_TIMEOUT_S = 20.0
@@ -33,6 +35,7 @@ SWEEP_INTERVAL_S = 2.0
 
 def create_app(
     store: RoomStore | None = None,
+    users: UserStore | None = None,
     poll_timeout: float = POLL_TIMEOUT_S,
     addresses: Callable[[], list[str]] = lan_addresses,
 ) -> FastAPI:
@@ -51,8 +54,10 @@ def create_app(
         finally:
             sweeper.cancel()
 
-    app = FastAPI(title="Drivee signalling", lifespan=lifespan)
+    app = FastAPI(title="Drivee", lifespan=lifespan)
     app.state.rooms = rooms
+    app.state.users = users or UserStore()
+    app.include_router(create_router(app.state.users))
 
     @app.post("/signal/host")
     async def join_host(body: HostJoinRequest) -> HostJoinResponse:

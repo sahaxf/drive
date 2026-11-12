@@ -41,23 +41,36 @@ const tyre = z.object({
 export const modelMaterial = z.enum(['paint', 'glass', 'trim', 'chrome', 'rubber', 'headlight', 'brakeLight', 'reverseLight']);
 export type ModelMaterial = z.infer<typeof modelMaterial>;
 
+/**
+ * An axle's wheels baked into the model's body mesh: triangles inside this cylinder
+ * (across the car, beyond `innerX` either side) are cut out as the two wheels.
+ * In model units, after `modelYawDeg`.
+ */
+const wheelCut = z.object({ z: z.number(), y: z.number(), radius: positive, innerX: nonNegative });
+
 export const carSpecSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   /** Model file and node mapping; the placeholder car has no model. */
   visual: z
     .object({
-      /** OBJ file next to car.json, +Z forward and +Y up; scaled to fit the axles. */
+      /** OBJ or glTF (.glb/.gltf) file next to car.json, +Y up; scaled to fit the axles. */
       model: z.string().optional(),
+      /** Turn about +Y that makes the model face +Z. */
+      modelYawDeg: z.number().default(0),
       paintColor: z.string().default('#d01c1f'),
       /** Model object holding each axle's pair of wheels; split into left and right. */
       wheelNodes: z.object({ front: z.string(), rear: z.string() }).optional(),
+      /** For a model whose wheels are part of the body mesh, where to cut them out. */
+      wheelCuts: z.object({ front: wheelCut, rear: wheelCut }).optional(),
       /** Model objects to leave out. */
       hiddenNodes: z.array(z.string()).default([]),
-      /** What each model material is drawn as; unlisted ones become dark trim. */
+      /** What each model material is drawn as, by name. */
       materials: z.record(z.string(), modelMaterial).default({}),
+      /** How unlisted materials are drawn: as one of the looks, or as the model has them. */
+      defaultMaterial: z.union([modelMaterial, z.literal('model')]).default('trim'),
     })
-    .default({ paintColor: '#d01c1f', hiddenNodes: [], materials: {} }),
+    .default({ modelYawDeg: 0, paintColor: '#d01c1f', hiddenNodes: [], materials: {}, defaultMaterial: 'trim' }),
   chassis: z.object({
     mass: positive,
     /** Collision box half-extents. */

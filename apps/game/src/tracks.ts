@@ -27,27 +27,6 @@ export async function loadCarSpec(id: string): Promise<CarSpec> {
   return parseCarSpec(await loadJson(`/cars/${id}/car.json`, `car "${id}"`));
 }
 
-export function bestLapKey(trackId: string): string {
-  return `drivee.bestLap.${trackId}`;
-}
-
-export function loadBestLap(trackId: string): number | null {
-  try {
-    const value = Number(localStorage.getItem(bestLapKey(trackId)));
-    return value > 0 ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-export function saveBestLap(trackId: string, seconds: number): void {
-  try {
-    localStorage.setItem(bestLapKey(trackId), String(seconds));
-  } catch {
-    // Private mode: the best lap just isn't remembered.
-  }
-}
-
 /** Summary numbers for a track, from its control points (no generation needed). */
 export function trackStats(spec: TrackSpec): { length: number; elevationRange: number } {
   const points = spec.centreline.points;
