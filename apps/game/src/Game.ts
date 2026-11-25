@@ -18,7 +18,6 @@ import { WrongWayDetector } from './race/WrongWay';
 import { loadCarModel } from './render/carModel';
 import { CarView } from './render/CarView';
 import { Renderer } from './render/Renderer';
-import { speedBlurAmount } from './render/SpeedBlur';
 import { buildTrackScene } from './render/track/buildTrackScene';
 import {
   addTrackPhysics,
@@ -44,8 +43,6 @@ const SPAWN_LIFT = 0.7;
 const GRID_OFFSET = 15;
 /** Below the terrain by this much means the car has escaped the world: put it back. */
 const FELL_THROUGH = 5;
-/** How quickly the speed blur follows the speed, 1/s: smooths out bumps and gear changes. */
-const BLUR_RESPONSE = 4;
 /** Share of the redline where the rev bar lights up with the automatic gearbox. */
 const REV_WARNING = 0.92;
 
@@ -81,7 +78,6 @@ export class Game {
   // Impact detection for haptics and sound: largest per-step velocity change since the last frame.
   private readonly lastVelocity = new Vector3();
   private readonly velocity = new Vector3();
-  private motionBlur = 0;
   private impact = 0;
 
   static async create(
@@ -243,15 +239,6 @@ export class Game {
           save();
         },
       },
-      {
-        id: 'blur',
-        label: 'Motion blur',
-        value: () => onOff(this.settings.motionBlur),
-        adjust: () => {
-          this.settings.motionBlur = !this.settings.motionBlur;
-          save();
-        },
-      },
       { id: 'quit', label: 'Quit to menu', key: 'KeyQ', activate: () => (location.search = '?play') },
     ];
   }
@@ -321,9 +308,6 @@ export class Game {
     // From the driver's seat of a closed car, the body has to be drawn from the inside.
     this.carView.setInteriorView(this.cameraRig.mode === 'windshield');
     this.renderer.setShadowFocus(this.renderPosition);
-    const blurTarget = this.settings.motionBlur ? speedBlurAmount(t.speed) : 0;
-    this.motionBlur += (blurTarget - this.motionBlur) * (1 - Math.exp(-BLUR_RESPONSE * frameDt));
-    this.renderer.setMotionBlur(this.motionBlur);
     this.renderer.render();
     this.updateFeedback(frameDt);
     this.pairing.update(this.phone.status);

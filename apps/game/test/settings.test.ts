@@ -18,8 +18,8 @@ describe('settings', () => {
 
   it('round-trips through storage', () => {
     const storage = memoryStorage();
-    saveSettings({ shadows: 'none', volume: 0.4, manualGears: true, motionBlur: false }, storage);
-    expect(loadSettings(storage)).toEqual({ shadows: 'none', volume: 0.4, manualGears: true, motionBlur: false });
+    saveSettings({ shadows: 'none', volume: 0.4, manualGears: true }, storage);
+    expect(loadSettings(storage)).toEqual({ shadows: 'none', volume: 0.4, manualGears: true });
   });
 
   it('is at full volume with automatic gears unless set otherwise', () => {
@@ -29,13 +29,6 @@ describe('settings', () => {
     expect(loadSettings(storage)).toMatchObject({ volume: 1, manualGears: false });
     storage.setItem('drivee.settings', '{"volume":7}');
     expect(loadSettings(storage).volume).toBe(1);
-  });
-
-  it('has motion blur on unless turned off', () => {
-    expect(loadSettings(memoryStorage()).motionBlur).toBe(true);
-    const storage = memoryStorage();
-    storage.setItem('drivee.settings', '{"motionBlur":"no"}');
-    expect(loadSettings(storage).motionBlur).toBe(true);
   });
 
   it('turns the old sound switch into a volume', () => {

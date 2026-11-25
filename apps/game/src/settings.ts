@@ -20,12 +20,10 @@ export interface Settings {
   volume: number;
   /** Shift gears by hand instead of leaving it to the automatic gearbox. */
   manualGears: boolean;
-  /** Streak the edges of the screen at speed. */
-  motionBlur: boolean;
 }
 
 const KEY = 'drivee.settings';
-const DEFAULTS: Settings = { shadows: 'medium', volume: 1, manualGears: false, motionBlur: true };
+const DEFAULTS: Settings = { shadows: 'medium', volume: 1, manualGears: false };
 const VOLUME_STEP = 0.1;
 
 export function loadSettings(storage: Pick<Storage, 'getItem'> | null = safeStorage()): Settings {
@@ -40,8 +38,7 @@ export function loadSettings(storage: Pick<Storage, 'getItem'> | null = safeStor
           ? 0
           : DEFAULTS.volume;
     const manualGears = typeof saved?.manualGears === 'boolean' ? saved.manualGears : DEFAULTS.manualGears;
-    const motionBlur = typeof saved?.motionBlur === 'boolean' ? saved.motionBlur : DEFAULTS.motionBlur;
-    return { shadows, volume, manualGears, motionBlur };
+    return { shadows, volume, manualGears };
   } catch {
     return { ...DEFAULTS };
   }
