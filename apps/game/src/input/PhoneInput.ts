@@ -78,6 +78,7 @@ export class PhoneInput implements InputSource {
   private pingId = 0;
   private readonly pingsInFlight = new Map<number, number>();
   private paused = false;
+  private manual = false;
   private timers: ReturnType<typeof setInterval>[] = [];
 
   constructor(
@@ -149,6 +150,13 @@ export class PhoneInput implements InputSource {
   setPaused(paused: boolean): void {
     if (paused === this.paused) return;
     this.paused = paused;
+    this.sendStatus();
+  }
+
+  /** Tell the phone whether gears are changed by hand (it then shows its shift paddles). */
+  setManual(manual: boolean): void {
+    if (manual === this.manual) return;
+    this.manual = manual;
     this.sendStatus();
   }
 
@@ -269,7 +277,7 @@ export class PhoneInput implements InputSource {
   private sendStatus(): void {
     if (!this.status.paired) return;
     const rtt = this.status.rttMs;
-    this.send({ t: 'status', rttMs: rtt === null ? null : Math.round(rtt), paused: this.paused });
+    this.send({ t: 'status', rttMs: rtt === null ? null : Math.round(rtt), paused: this.paused, manual: this.manual });
   }
 
   private send(message: HostMessage): void {

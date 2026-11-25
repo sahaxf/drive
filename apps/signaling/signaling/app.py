@@ -56,7 +56,7 @@ def create_app(
 
     app = FastAPI(title="Drivee", lifespan=lifespan)
     app.state.rooms = rooms
-    app.state.users = users or UserStore()
+    app.state.users = users or UserStore(seed_default_user=True)
     app.include_router(create_router(app.state.users))
 
     @app.post("/signal/host")

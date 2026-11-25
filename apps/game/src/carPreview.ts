@@ -1,13 +1,16 @@
 import './style.css';
 import { Mesh, MeshStandardMaterial, PlaneGeometry, Quaternion, Vector3 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { cameraMounts } from './camera/CameraRig';
+import { loadCarModel } from './render/carModel';
 import { CarView, restHubY } from './render/CarView';
 import { Renderer } from './render/Renderer';
 import { loadCarSpec } from './tracks';
 
 /**
  * Dev-only turntable for working on the car's looks (`/car.html`, not part of the build).
- * Drag to orbit. `?view=front|side|rear|three|top` holds a fixed camera for screenshots.
+ * Drag to orbit. `?view=front|side|rear|three|top` holds a fixed camera for screenshots;
+ * `?view=cabin` looks out from the driver's seat (the windshield camera).
  */
 const VIEWS: Record<string, [number, number, number]> = {
   three: [4.2, 1.6, 4.6],
@@ -29,17 +32,22 @@ async function preview(): Promise<void> {
   ground.receiveShadow = true;
   renderer.scene.add(ground);
 
-  const car = new CarView(spec);
+  const car = new CarView(spec, await loadCarModel(spec));
   renderer.scene.add(car.root);
   // Body height that puts the tyres on the ground at rest.
   const position = new Vector3(0, spec.wheels.radius - (restHubY(spec, true) + restHubY(spec, false)) / 2, 0);
   renderer.setShadowFocus(position);
 
   const viewName = new URLSearchParams(location.search).get('view') ?? '';
-  const view = VIEWS[viewName];
+  const cabin = viewName === 'cabin';
+  const [eyeX, eyeY, eyeZ] = cameraMounts(spec).windshield;
+  // The driver's eye, and a point just ahead of it to orbit about: drag to look round the cabin.
+  const view = cabin ? ([eyeX, position.y + eyeY, eyeZ] as [number, number, number]) : VIEWS[viewName];
   const controls = new OrbitControls(renderer.camera, renderer.webgl.domElement);
-  controls.target.set(...(TARGETS[viewName] ?? [0, 0.5, 0]));
+  controls.target.set(...(cabin ? ([eyeX, position.y + eyeY - 0.003, eyeZ + 0.05] as const) : (TARGETS[viewName] ?? [0, 0.5, 0])));
   renderer.camera.position.set(...(view ?? VIEWS.three!));
+  car.setInteriorView(cabin);
+  if (import.meta.env.DEV) Object.assign(window, { __preview: { car, renderer, spec, controls } });
   controls.autoRotate = !view;
   controls.autoRotateSpeed = 0.8;
   controls.update();
@@ -59,7 +67,7 @@ async function preview(): Promise<void> {
 
   const start = performance.now();
   const frame = () => {
-    const t = view ? 0 : (performance.now() - start) / 1000;
+    const t = view && !cabin ? 0 : (performance.now() - start) / 1000;
     for (const w of wheels) {
       w.steerAngle = w.front ? Math.sin(t * 0.7) * 0.45 : 0;
       w.spinAngle = t * 3;

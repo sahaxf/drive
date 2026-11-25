@@ -18,6 +18,11 @@ MAX_LAPS_PER_TRACK = 50
 
 _SCRYPT = {"n": 2**14, "r": 8, "p": 1, "dklen": 32}
 
+# Account every fresh server starts with, so there's always one to log in with while
+# developing. Anyone can use it: leave it out (seed_default_user=False) on a public server.
+DEFAULT_USERNAME = "test"
+DEFAULT_PASSWORD = "123456"
+
 
 class UsernameTaken(Exception):
     pass
@@ -47,12 +52,16 @@ def _hash(password: str, salt: bytes) -> bytes:
 
 
 class UserStore:
-    def __init__(self, clock: Callable[[], float] = time.time) -> None:
+    def __init__(self, clock: Callable[[], float] = time.time, seed_default_user: bool = False) -> None:
         self._clock = clock
-        # Keyed by the lower-cased username, so "Akash" and "akash" are one account.
+        # Keyed by the lower-cased username, so "Test" and "test" are one account.
         self.users: dict[str, User] = {}
         # Session token -> key into `users`.
         self.sessions: dict[str, str] = {}
+        if seed_default_user:
+            salt = secrets.token_bytes(16)
+            key = DEFAULT_USERNAME.lower()
+            self.users[key] = User(DEFAULT_USERNAME, salt, _hash(DEFAULT_PASSWORD, salt), self._clock())
 
     def create(self, username: str, password: str) -> tuple[User, str]:
         key = username.lower()

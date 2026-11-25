@@ -12,6 +12,8 @@ const BINDINGS = {
   pause: ['Escape', 'KeyP'],
   tc: ['KeyT'],
   abs: ['KeyB'],
+  shiftUp: ['KeyE'],
+  shiftDown: ['KeyQ'],
 } as const;
 
 /** Keys are digital, so axes ramp toward their target to feel like a pedal and wheel. */
@@ -63,6 +65,8 @@ export class KeyboardInput implements InputSource {
     if (held(BINDINGS.pause)) buttons |= Button.Pause;
     if (held(BINDINGS.tc)) buttons |= Button.ToggleTractionControl;
     if (held(BINDINGS.abs)) buttons |= Button.ToggleAbs;
+    if (held(BINDINGS.shiftUp)) buttons |= Button.ShiftUp;
+    if (held(BINDINGS.shiftDown)) buttons |= Button.ShiftDown;
 
     return {
       steer: this.steer,

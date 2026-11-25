@@ -24,7 +24,8 @@ export type LinkState = 'connecting' | 'waiting-for-game' | 'linking' | 'connect
 
 export interface LinkCallbacks {
   onState(state: LinkState): void;
-  onStatus(rttMs: number | null, paused: boolean): void;
+  /** `manual`: gears are changed by hand in the game. */
+  onStatus(rttMs: number | null, paused: boolean, manual: boolean): void;
   onBuzz(pattern: number[]): void;
 }
 
@@ -108,7 +109,7 @@ export class PadLink {
         this.send({ t: 'pong', id: message.id });
         break;
       case 'status':
-        this.callbacks.onStatus(message.rttMs, message.paused);
+        this.callbacks.onStatus(message.rttMs, message.paused, message.manual === true);
         break;
       case 'buzz':
         this.callbacks.onBuzz(message.pattern);

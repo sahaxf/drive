@@ -15,13 +15,16 @@ const signalProxy: Record<string, ProxyOptions> = {
   [API_PATH]: { target: serverUrl },
 };
 
-export default defineConfig({
+// `vite --mode http` serves plain HTTP: the desktop game runs fine on http://localhost (a
+// secure context), which tools that reject the self-signed certificate can open. The phone
+// controller still needs the HTTPS server.
+export default defineConfig(({ mode }) => ({
   // Track and car packages live in the repo-level public/ folder.
   publicDir: '../../public',
   plugins: [
     // Phone motion sensors only work in a secure context, so dev serves HTTPS with a
     // self-signed certificate (accept the browser warning once on each device).
-    basicSsl(),
+    ...(mode === 'http' ? [] : [basicSsl()]),
   ],
   server: {
     host: true,
@@ -41,4 +44,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

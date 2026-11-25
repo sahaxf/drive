@@ -12,7 +12,8 @@ function drive(timer: LapTimer, from: number, speed: number, seconds: number) {
   for (let t = 0; t < seconds - 1e-9; t += DT) {
     d = (d + speed * DT) % LENGTH;
     const e = timer.update(d, DT);
-    if (e) events.push(e);
+    // Sector times have their own tests.
+    if (e && e.kind !== 'sector') events.push(e);
   }
   return { events, at: d };
 }

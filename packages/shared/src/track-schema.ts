@@ -47,6 +47,8 @@ export const trackSpecSchema = z.object({
   race: z.object({
     /** Start/finish line, metres along the loop from the first control point. */
     startDistance: nonNegative.default(0),
+    /** Where each sector after the first begins, metres along the loop. Default: equal thirds. */
+    sectors: z.array(nonNegative).optional(),
   }),
   terrain: z.object({
     seed: z.number().int(),

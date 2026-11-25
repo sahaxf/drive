@@ -92,7 +92,13 @@ function updatePedals(): void {
 
 // --- Buttons ---------------------------------------------------------------------------
 
-const BUTTON_BITS: Record<string, number> = { camera: Button.Camera, reset: Button.Reset, pause: Button.Pause };
+const BUTTON_BITS: Record<string, number> = {
+  camera: Button.Camera,
+  reset: Button.Reset,
+  pause: Button.Pause,
+  'shift-up': Button.ShiftUp,
+  'shift-down': Button.ShiftDown,
+};
 let heldButtons = 0;
 /** Pressed since the last packet: a tap shorter than one send interval still gets through. */
 let tappedButtons = 0;
@@ -249,10 +255,12 @@ $('#start').addEventListener('click', async () => {
 
   link = new PadLink(room, {
     onState: renderLink,
-    onStatus: (rtt, paused) => {
+    onStatus: (rtt, paused, manual) => {
       rttMs = rtt;
       gamePaused = paused;
       $('#paused-badge').hidden = !paused;
+      // Shift paddles only when the game's gearbox is manual.
+      for (const paddle of $$('.paddle')) paddle.hidden = !manual;
       renderLink();
     },
     onBuzz: vibrate,

@@ -7,7 +7,7 @@ import {
   updateDrivetrain,
   type DrivetrainState,
 } from './drivetrain';
-import { computeTyreForce } from './tyre';
+import { computeTyreForce, slipAngle } from './tyre';
 
 const GRAVITY = 9.81;
 const AIR_DENSITY = 1.225;
@@ -50,6 +50,8 @@ export interface WheelState {
   spinExcess: number;
   locked: boolean;
   spinning: boolean;
+  /** Angle between where the tyre points and where it is going, rad (0 in the air). */
+  slipAngle: number;
   contactPoint: Vector3;
   contactNormal: Vector3;
   /** Grip multiplier of the surface under this wheel. */
@@ -80,6 +82,8 @@ export class Vehicle {
   tractionControl: boolean;
   abs: boolean;
   stability: boolean;
+  /** The driver changes gear (see {@link requestShift}) instead of the automatic gearbox. */
+  manualGears = false;
   /** Maps the collider under a wheel to a grip multiplier; the track installs its own. */
   surfaceGrip: (colliderHandle: number) => number = () => 1;
 
@@ -87,6 +91,7 @@ export class Vehicle {
   private readonly nominalLoad: number;
   private readonly yawInertia: number;
   private readonly wheelbase: number;
+  private pendingShift = 0;
 
   // Scratch vectors, reused every step to avoid garbage.
   private readonly pos = new Vector3();
@@ -167,12 +172,24 @@ export class Vehicle {
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
     Object.assign(this.drivetrain, createDrivetrainState(this.spec));
+    this.pendingShift = 0;
     for (const w of this.wheels) {
       w.compression = 0;
       w.length = w.suspension.restLength;
       w.omega = 0;
       w.spinExcess = 0;
+      w.slipAngle = 0;
     }
+  }
+
+  /** Ask for the next gear up (+1) or down (-1) on the coming step. Manual gears only. */
+  requestShift(direction: -1 | 1): void {
+    this.pendingShift = direction;
+  }
+
+  /** Weight each wheel carries with the car at rest on the level, N. */
+  get wheelLoad(): number {
+    return this.nominalLoad;
   }
 
   /** Advance one fixed physics step. Call before `world.step()`. */
@@ -190,9 +207,17 @@ export class Vehicle {
     const out = updateDrivetrain(
       this.spec,
       this.drivetrain,
-      { throttle: input.throttle, brake: input.brake, forwardSpeed, drivenWheelOmega: drivenOmega },
+      {
+        throttle: input.throttle,
+        brake: input.brake,
+        forwardSpeed,
+        drivenWheelOmega: drivenOmega,
+        manual: this.manualGears,
+        shift: this.pendingShift,
+      },
       dt,
     );
+    this.pendingShift = 0;
 
     const driverAngle = this.steerAngle(input.steer, Math.abs(forwardSpeed));
     const steerAngle = this.stability ? this.countersteer(driverAngle, linvel, forwardSpeed) : driverAngle;
@@ -254,6 +279,7 @@ export class Vehicle {
         spinExcess: 0,
         locked: false,
         spinning: false,
+        slipAngle: 0,
         contactPoint: new Vector3(),
         contactNormal: new Vector3(0, 1, 0),
         surfaceGrip: 1,
@@ -406,6 +432,7 @@ export class Vehicle {
       this.spinFree(w, driveForce, dt);
       w.locked = false;
       w.spinning = false;
+      w.slipAngle = 0;
       return { spinning: false, locked: false };
     }
 
@@ -439,6 +466,7 @@ export class Vehicle {
     this.updateWheelSpin(w, vLong, result.unusedDrive, result.locked, dt);
     w.locked = result.locked;
     w.spinning = result.spinning;
+    w.slipAngle = slipAngle(vLat, vLong);
 
     this.impulse
       .copy(this.wheelForward)

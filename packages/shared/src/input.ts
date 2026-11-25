@@ -20,6 +20,8 @@ export const Button = {
   Pause: 1 << 2,
   ToggleTractionControl: 1 << 3,
   ToggleAbs: 1 << 4,
+  ShiftUp: 1 << 5,
+  ShiftDown: 1 << 6,
 } as const;
 export type Button = (typeof Button)[keyof typeof Button];
 

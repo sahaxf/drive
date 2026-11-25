@@ -111,5 +111,9 @@
     "tractionControl": true,
     "abs": true,
     "stability": true
+  },
+  "cameras": {
+    "hood": [0, 0.42, 0.9],
+    "windshield": [0, 0.62, -0.35]
   }
 }

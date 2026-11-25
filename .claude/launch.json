@@ -7,6 +7,12 @@
       "runtimeArgs": ["run", "dev"],
       "url": "https://localhost:5173",
       "port": 5173
+    },
+    {
+      "name": "drivee-http",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:http", "-w", "@drivee/game"],
+      "port": 5180
     }
   ]
 }

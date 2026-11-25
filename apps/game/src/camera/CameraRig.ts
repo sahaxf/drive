@@ -1,7 +1,34 @@
 import { MathUtils, Quaternion, Vector3, type PerspectiveCamera } from 'three';
+import type { CarSpec } from '@drivee/shared';
 
-export type CameraMode = 'chase' | 'hood';
-const MODES: CameraMode[] = ['chase', 'hood'];
+export type CameraMode = 'chase' | 'hood' | 'windshield' | 'bumper';
+/** Cameras fixed to the car. */
+export type OnboardMode = Exclude<CameraMode, 'chase'>;
+const MODES: CameraMode[] = ['chase', 'hood', 'windshield', 'bumper'];
+
+/** Position of each onboard camera, car-local. */
+export type CameraMounts = Record<OnboardMode, readonly [number, number, number]>;
+
+/** How far ahead an onboard camera looks, and how far below its own height, m. */
+const ONBOARD_LOOK = { ahead: 19, drop: 0.28 };
+/** The same from the driver's seat: nearly level, so the road fills the windscreen, not the dashboard. */
+const CABIN_LOOK = { ahead: 19, drop: 0.06 };
+
+/**
+ * A car's onboard camera positions: those its car.json gives, the rest placed from the
+ * collision box (half-height `hy`, half-length `hz`) so any car gets a usable set.
+ */
+export function cameraMounts(spec: Pick<CarSpec, 'chassis' | 'cameras'>): CameraMounts {
+  const [, hy, hz] = spec.chassis.halfExtents;
+  return {
+    hood: spec.cameras.hood ?? [0, hy + 0.46, hz * 0.5],
+    windshield: spec.cameras.windshield ?? [-0.3, hy + 0.1, hz * 0.05],
+    bumper: spec.cameras.bumper ?? [0, 0.05, hz + 0.15],
+  };
+}
+
+/** Mounts of the car the chase camera was tuned for, used when none are given. */
+const REFERENCE_MOUNTS: CameraMounts = { hood: [0, 0.78, 1.1], windshield: [0, 0.94, 0.4], bumper: [0, 0.05, 2.35] };
 
 const CHASE = { distance: 4.6, height: 1.35, lookAhead: 4, lookHeight: 1.0, yawRate: 4.5, heightRate: 9 };
 /** Half the length of the car `CHASE.distance` was tuned for; longer cars sit further back. */
@@ -31,6 +58,7 @@ export class CameraRig {
   constructor(
     private readonly camera: PerspectiveCamera,
     carHalfLength = REFERENCE_HALF_LENGTH,
+    private readonly mounts: CameraMounts = REFERENCE_MOUNTS,
   ) {
     this.extraDistance = Math.max(0, carHalfLength - REFERENCE_HALF_LENGTH);
   }
@@ -46,8 +74,8 @@ export class CameraRig {
   }
 
   update(dt: number, carPosition: Vector3, carRotation: Quaternion, speed: number): void {
-    if (this.mode === 'hood') this.updateHood(carPosition, carRotation);
-    else this.updateChase(dt, carPosition, carRotation, speed);
+    if (this.mode === 'chase') this.updateChase(dt, carPosition, carRotation, speed);
+    else this.updateOnboard(this.mounts[this.mode], this.mode === 'windshield' ? CABIN_LOOK : ONBOARD_LOOK, carPosition, carRotation);
 
     const fov = BASE_FOV + SPEED_FOV * Math.min(speed / FOV_FULL_SPEED, 1);
     if (Math.abs(this.camera.fov - fov) > 0.01) {
@@ -94,9 +122,16 @@ export class CameraRig {
     this.initialised = true;
   }
 
-  private updateHood(carPosition: Vector3, carRotation: Quaternion): void {
-    this.camera.position.copy(this.tmp.set(0, 0.78, 1.1).applyQuaternion(carRotation).add(carPosition));
-    this.target.set(0, 0.5, 20).applyQuaternion(carRotation).add(carPosition);
+  /** Fixed to the car at `mount`, rolling and pitching with it, looking straight ahead. */
+  private updateOnboard(
+    mount: readonly [number, number, number],
+    look: { ahead: number; drop: number },
+    carPosition: Vector3,
+    carRotation: Quaternion,
+  ): void {
+    const [x, y, z] = mount;
+    this.camera.position.copy(this.tmp.set(x, y, z).applyQuaternion(carRotation).add(carPosition));
+    this.target.set(x, y - look.drop, z + look.ahead).applyQuaternion(carRotation).add(carPosition);
     this.camera.up.set(0, 1, 0).applyQuaternion(carRotation);
     this.camera.lookAt(this.target);
   }

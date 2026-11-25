@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from signaling.app import create_app
-from signaling.users import MAX_LAPS_PER_TRACK, UserStore
+from signaling.users import DEFAULT_PASSWORD, DEFAULT_USERNAME, MAX_LAPS_PER_TRACK, UserStore
 
 
 def client() -> TestClient:
@@ -79,3 +79,13 @@ def test_keeps_recent_laps_but_never_loses_the_best() -> None:
     assert len(user.laps["t"]) == MAX_LAPS_PER_TRACK
     assert 50.0 not in [lap.time for lap in user.laps["t"]]
     assert user.best["t"].time == 50.0
+
+
+def test_server_starts_with_the_default_test_user() -> None:
+    with client() as c:
+        login = c.post("/api/login", json={"username": "test", "password": "123456"})
+        assert login.status_code == 200
+        assert login.json()["user"]["username"] == DEFAULT_USERNAME
+        assert c.post("/api/users", json={"username": "TEST", "password": "whatever1"}).status_code == 409
+    # Only when asked for.
+    assert UserStore().login(DEFAULT_USERNAME, DEFAULT_PASSWORD) is None

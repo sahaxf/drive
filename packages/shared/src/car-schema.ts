@@ -155,6 +155,35 @@ export const carSpecSchema = z.object({
     /** Countersteers into slides and damps yaw the steering didn't ask for (like ESC). */
     stability: z.boolean().default(true),
   }),
+  /**
+   * Where the onboard cameras sit, car-local (relative to the collision box centre). Any
+   * left out is placed from the size of the chassis.
+   */
+  cameras: z
+    .object({
+      /** On the bonnet, looking down the road over it. */
+      hood: vec3.optional(),
+      /** At the driver's eye line, by the top of the windscreen. */
+      windshield: vec3.optional(),
+      /** Low on the nose, nothing of the car in view. */
+      bumper: vec3.optional(),
+      /**
+       * For a closed car whose windshield camera sits inside the cabin: the inside of the
+       * body is lined, the wheels are left out and a dashboard is built to these sizes.
+       */
+      cabin: z
+        .object({
+          /** Height of the dashboard's top. */
+          dashTop: z.number(),
+          /** Z of its edge nearest the driver, and of its far edge under the windscreen. */
+          dashRear: z.number(),
+          dashFront: z.number(),
+          /** Width of the cabin at the dashboard. */
+          width: positive,
+        })
+        .optional(),
+    })
+    .default({}),
 });
 
 export type CarSpec = z.infer<typeof carSpecSchema>;

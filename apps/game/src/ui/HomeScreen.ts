@@ -1,4 +1,5 @@
 import type { CarSpec, TrackSpec } from '@drivee/shared';
+import { carStats } from '../carStats';
 import { formatLapTime } from '../race/LapTimer';
 import { loadSettings, nextShadowQuality, saveSettings } from '../settings';
 import { trackStats } from '../tracks';
@@ -26,19 +27,20 @@ export function lastChoice(trackIds: string[], carIds: string[]): { track: strin
 }
 
 /**
- * Track selection: one card per track with a map, length, elevation and the player's best
- * lap, plus the car to drive. Mouse, keyboard (← → Enter, C for the car, Esc back) and
- * gamepad (D-pad / stick, A, X for the car, B back) all work.
+ * Track and car selection: one card per track with a map, length, elevation and the
+ * player's best lap, and one per car with a picture and its headline numbers. Mouse,
+ * keyboard (← → Enter, C for the car, Esc back) and gamepad (D-pad / stick, A, X for the
+ * car, B back) all work.
  */
 export class HomeScreen {
   private readonly root: HTMLElement;
   private readonly cards: HTMLElement[] = [];
+  private readonly carCards: HTMLElement[] = [];
   private selected = 0;
   private padHeld = new Set<string>();
   private running = true;
   private readonly settings = loadSettings();
   private readonly shadowsLabel: HTMLElement;
-  private readonly carLabel: HTMLElement;
   private car: number;
 
   constructor(
@@ -49,6 +51,8 @@ export class HomeScreen {
     private readonly bests: Record<string, number>,
     username: string,
     private readonly onChoose: (trackId: string, carId: string) => void,
+    /** Produces a picture of each car as a URL, one call of `onStill` each (see carStills). */
+    stills: (cars: CarSpec[], onStill: (carId: string, url: string) => void) => Promise<void> = async () => {},
   ) {
     this.root = document.createElement('div');
     this.root.className = 'home';
@@ -60,8 +64,9 @@ export class HomeScreen {
       <header class="home-title">Drivee</header>
       <div class="home-label">Choose a track</div>
       <div class="home-cards"></div>
+      <div class="home-label home-label-cars">Choose a car</div>
+      <div class="home-cars"></div>
       <div class="home-settings">
-        <button type="button" class="home-setting" data-el="car-button"><span class="home-setting-label">Car</span> ◂ <span data-el="car"></span> ▸</button>
         <button type="button" class="home-setting" data-el="shadows-button"><span class="home-setting-label">Shadows</span> ◂ <span data-el="shadows"></span> ▸</button>
       </div>
       <footer class="home-hint">← → Select · Enter Drive · C Car · G Shadows · Esc Back</footer>
@@ -79,11 +84,24 @@ export class HomeScreen {
     this.shadowsLabel = this.root.querySelector<HTMLElement>('[data-el="shadows"]')!;
     this.shadowsLabel.textContent = this.settings.shadows;
     this.root.querySelector('[data-el="shadows-button"]')!.addEventListener('click', () => this.cycleShadows());
-    this.carLabel = this.root.querySelector<HTMLElement>('[data-el="car"]')!;
-    this.root.querySelector('[data-el="car-button"]')!.addEventListener('click', () => this.cycleCar());
-    this.car = Math.max(0, cars.findIndex((c) => c.id === safeGet(LAST_CAR_KEY)));
-    this.showCar();
+    const carList = this.root.querySelector('.home-cars')!;
+    cars.forEach((spec, i) => {
+      const card = this.carCard(spec);
+      card.addEventListener('click', () => this.selectCar(i));
+      carList.appendChild(card);
+      this.carCards.push(card);
+    });
+    this.car = 0;
+    this.selectCar(Math.max(0, cars.findIndex((c) => c.id === safeGet(LAST_CAR_KEY))));
     parent.appendChild(this.root);
+    stills(cars, (carId, url) => {
+      const index = cars.findIndex((c) => c.id === carId);
+      const img = this.carCards[index]?.querySelector('img');
+      if (img) img.src = url;
+    }).catch((error: unknown) => {
+      // The page still works without the pictures.
+      console.error(error);
+    });
 
     const last = safeGet(LAST_TRACK_KEY);
     this.select(Math.max(0, tracks.findIndex((t) => t.meta.id === last)));
@@ -120,6 +138,34 @@ export class HomeScreen {
     return card;
   }
 
+  private carCard(spec: CarSpec): HTMLElement {
+    const stats = carStats(spec);
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'home-car';
+    card.innerHTML = `
+      <img class="home-car-shot" alt="" />
+      <div class="home-car-text">
+        <div class="home-car-name"></div>
+        <dl class="home-stats">
+          <dt>Power</dt><dd>${stats.powerHp} hp</dd>
+          <dt>Weight</dt><dd>${Math.round(stats.mass)} kg</dd>
+          <dt>Drive</dt><dd>${stats.layout}</dd>
+          <dt>Top speed</dt><dd>${stats.topSpeedKmh} km/h</dd>
+        </dl>
+      </div>
+    `;
+    // Text from car files goes in as text, never as HTML.
+    card.querySelector('.home-car-name')!.textContent = spec.name;
+    card.querySelector('img')!.alt = spec.name;
+    return card;
+  }
+
+  private selectCar(index: number): void {
+    this.car = (index + this.carCards.length) % this.carCards.length;
+    this.carCards.forEach((card, i) => card.classList.toggle('selected', i === this.car));
+  }
+
   private select(index: number): void {
     this.selected = (index + this.cards.length) % this.cards.length;
     this.cards.forEach((card, i) => card.classList.toggle('selected', i === this.selected));
@@ -144,13 +190,7 @@ export class HomeScreen {
   }
 
   private cycleCar(): void {
-    this.car = (this.car + 1) % this.cars.length;
-    this.showCar();
-  }
-
-  private showCar(): void {
-    // Text from car files goes in as text, never as HTML.
-    this.carLabel.textContent = this.cars[this.car]!.name;
+    this.selectCar(this.car + 1);
   }
 
   private cycleShadows(): void {

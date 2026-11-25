@@ -7,6 +7,8 @@
   /* Best lap (as in timing screens). */
   --hud-best: #d2b4ff;
   --hud-hot: #ff4d4d;
+  /* Quicker than the best lap. */
+  --hud-good: #5fd38d;
   --hud-panel: rgba(8, 10, 14, 0.5);
 }
 
@@ -259,22 +261,31 @@ body {
   color: var(--hud-fg);
 }
 
-/* --- Pause --- */
+/* --- Pause menu --- */
 
-.hud-paused {
+.pause {
   position: absolute;
   inset: 0;
   display: none;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
+}
+
+.pause.open {
+  display: flex;
+}
+
+.pause-title {
   font-size: 22px;
   font-weight: 300;
   letter-spacing: 0.5em;
-  background: rgba(0, 0, 0, 0.4);
+  margin-right: -0.5em;
 }
 
-.hud-paused small {
+.pause-reason {
   display: block;
   margin-top: 14px;
   font-size: 11px;
@@ -283,8 +294,124 @@ body {
   color: var(--hud-hot);
 }
 
-.hud-paused small:empty {
+.pause-reason:empty {
   display: none;
+}
+
+.pause-list {
+  display: flex;
+  flex-direction: column;
+  width: min(360px, 86vw);
+  margin-top: 30px;
+}
+
+.pause-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 11px 16px;
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: inherit;
+  text-shadow: inherit;
+  color: var(--hud-dim);
+  background: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.pause-item.selected {
+  color: var(--hud-fg);
+  border-color: var(--hud-line);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.pause-value {
+  color: var(--hud-fg);
+}
+
+.pause-hint {
+  margin-top: 26px;
+  letter-spacing: 0.3em;
+}
+
+/* --- Lap delta, sectors, warnings --- */
+
+.hud-delta {
+  min-height: 20px;
+  margin-top: 6px;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+}
+
+.hud-delta.faster,
+.hud-sector.faster span:last-child {
+  color: var(--hud-good);
+}
+
+.hud-delta.slower,
+.hud-sector.slower span:last-child {
+  color: var(--hud-hot);
+}
+
+.hud-sectors {
+  display: flex;
+  gap: 14px;
+  margin: 8px 0 4px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--hud-faint);
+}
+
+.hud-sector {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.hud-sector.set span:last-child {
+  color: var(--hud-fg);
+}
+
+.hud-time.invalid,
+.hud-row span.invalid {
+  color: var(--hud-faint);
+  text-decoration: line-through;
+}
+
+.hud-toast.invalid div:last-child {
+  color: var(--hud-faint);
+  text-decoration: line-through;
+}
+
+.hud-warning {
+  position: absolute;
+  top: 28%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  padding: 10px 22px 10px 28px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.4em;
+  color: #fff;
+  background: rgba(200, 30, 30, 0.82);
+}
+
+.hud-warning.show {
+  display: block;
+  animation: hud-blink 0.9s steps(2, jump-none) infinite;
+}
+
+@keyframes hud-blink {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.45;
+  }
 }
 
 @media (max-width: 700px) {
@@ -409,11 +536,6 @@ body {
   color: var(--hud-dim);
 }
 
-.hud-paused .hud-label {
-  margin-top: 28px;
-  letter-spacing: 0.3em;
-}
-
 /* --- Home screen --- */
 
 .home {
@@ -422,9 +544,10 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* Centred while it fits; from the top once it has to scroll. */
+  justify-content: safe center;
   gap: 18px;
-  padding: 32px;
+  padding: 56px 32px 32px;
   overflow-y: auto;
   background: radial-gradient(ellipse at 50% 35%, #1a1f27 0%, #0b0d12 70%);
   text-transform: uppercase;
@@ -538,6 +661,80 @@ body {
   letter-spacing: 0.1em;
   text-transform: none;
   color: var(--hud-faint);
+}
+
+.home-label-cars {
+  margin-top: 14px;
+}
+
+.home-cars {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 20px;
+}
+
+.home-car {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  width: 440px;
+  max-width: 100%;
+  padding: 12px 18px 12px 12px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--hud-line);
+  cursor: pointer;
+  opacity: 0.55;
+  transition:
+    opacity 0.15s,
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.home-car:hover {
+  opacity: 0.8;
+}
+
+.home-car.selected {
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.home-car-shot {
+  flex: none;
+  width: 200px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* No picture yet: an empty frame rather than the browser's broken-image mark. */
+.home-car-shot:not([src]) {
+  visibility: hidden;
+}
+
+.home-car-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.home-car-name {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+}
+
+.home-car .home-stats {
+  margin-top: 8px;
+  padding-top: 8px;
+  gap: 3px 16px;
+  font-size: 11px;
 }
 
 .home-hint {

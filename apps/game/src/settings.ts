@@ -16,18 +16,32 @@ export const SHADOW_MAP_SIZE: Record<ShadowQuality, number> = {
 
 export interface Settings {
   shadows: ShadowQuality;
-  sound: boolean;
+  /** Master volume, 0 (muted) to 1. */
+  volume: number;
+  /** Shift gears by hand instead of leaving it to the automatic gearbox. */
+  manualGears: boolean;
+  /** Streak the edges of the screen at speed. */
+  motionBlur: boolean;
 }
 
 const KEY = 'drivee.settings';
-const DEFAULTS: Settings = { shadows: 'medium', sound: true };
+const DEFAULTS: Settings = { shadows: 'medium', volume: 1, manualGears: false, motionBlur: true };
+const VOLUME_STEP = 0.1;
 
 export function loadSettings(storage: Pick<Storage, 'getItem'> | null = safeStorage()): Settings {
   try {
-    const saved = JSON.parse(storage?.getItem(KEY) ?? 'null') as Partial<Settings> | null;
+    // `sound` is the on/off switch older versions saved instead of a volume.
+    const saved = JSON.parse(storage?.getItem(KEY) ?? 'null') as (Partial<Settings> & { sound?: unknown }) | null;
     const shadows = SHADOW_QUALITIES.includes(saved?.shadows as ShadowQuality) ? saved!.shadows! : DEFAULTS.shadows;
-    const sound = typeof saved?.sound === 'boolean' ? saved.sound : DEFAULTS.sound;
-    return { shadows, sound };
+    const volume =
+      typeof saved?.volume === 'number' && Number.isFinite(saved.volume)
+        ? Math.min(Math.max(saved.volume, 0), 1)
+        : saved?.sound === false
+          ? 0
+          : DEFAULTS.volume;
+    const manualGears = typeof saved?.manualGears === 'boolean' ? saved.manualGears : DEFAULTS.manualGears;
+    const motionBlur = typeof saved?.motionBlur === 'boolean' ? saved.motionBlur : DEFAULTS.motionBlur;
+    return { shadows, volume, manualGears, motionBlur };
   } catch {
     return { ...DEFAULTS };
   }
@@ -43,6 +57,11 @@ export function saveSettings(settings: Settings, storage: Pick<Storage, 'setItem
 
 export function nextShadowQuality(current: ShadowQuality): ShadowQuality {
   return SHADOW_QUALITIES[(SHADOW_QUALITIES.indexOf(current) + 1) % SHADOW_QUALITIES.length]!;
+}
+
+/** One step up or down the volume slider, kept to 0..1 and free of rounding drift. */
+export function stepVolume(volume: number, direction: -1 | 1): number {
+  return Math.min(Math.max(Math.round((volume + direction * VOLUME_STEP) * 10) / 10, 0), 1);
 }
 
 function safeStorage(): Storage | null {

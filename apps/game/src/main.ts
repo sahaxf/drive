@@ -2,6 +2,7 @@ import './style.css';
 import type { UserView } from '@drivee/shared';
 import { Game } from './Game';
 import { AccountClient } from './net/AccountClient';
+import { carStills } from './render/carStills';
 import { heroShots } from './render/heroShots';
 import { loadCarIndex, loadCarSpec, loadTrackIndex, loadTrackSpec } from './tracks';
 import { HomeScreen, lastChoice } from './ui/HomeScreen';
@@ -46,9 +47,17 @@ async function boot(): Promise<void> {
   if (!wantsGame) {
     const [tracks, cars] = await Promise.all([Promise.all(ids.map(loadTrackSpec)), Promise.all(carIds.map(loadCarSpec))]);
     loading.remove();
-    new HomeScreen(document.body, tracks, cars, bestTimes(user), user.username, (trackId, carId) => {
-      location.search = `?${new URLSearchParams({ track: trackId, car: carId })}`;
-    });
+    new HomeScreen(
+      document.body,
+      tracks,
+      cars,
+      bestTimes(user),
+      user.username,
+      (trackId, carId) => {
+        location.search = `?${new URLSearchParams({ track: trackId, car: carId })}`;
+      },
+      carStills,
+    );
     return;
   }
 

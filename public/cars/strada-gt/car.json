@@ -118,5 +118,9 @@
     "tractionControl": true,
     "abs": true,
     "stability": true
+  },
+  "cameras": {
+    "windshield": [-0.3, 0.4, 0.32],
+    "cabin": { "dashTop": 0.18, "dashRear": 0.74, "dashFront": 1.15, "width": 1.6 }
   }
 }

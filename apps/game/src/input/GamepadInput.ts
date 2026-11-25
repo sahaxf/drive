@@ -6,6 +6,8 @@ const AXIS_LEFT_X = 0;
 const BTN_A = 0;
 const BTN_B = 1;
 const BTN_Y = 3;
+const BTN_LB = 4;
+const BTN_RB = 5;
 const BTN_LT = 6;
 const BTN_RT = 7;
 const BTN_START = 9;
@@ -33,6 +35,8 @@ export class GamepadInput implements InputSource {
     if (pressed(BTN_START)) buttons |= Button.Pause;
     if (pressed(BTN_DPAD_LEFT)) buttons |= Button.ToggleTractionControl;
     if (pressed(BTN_DPAD_RIGHT)) buttons |= Button.ToggleAbs;
+    if (pressed(BTN_RB)) buttons |= Button.ShiftUp;
+    if (pressed(BTN_LB)) buttons |= Button.ShiftDown;
 
     return {
       steer,

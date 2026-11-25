@@ -36,7 +36,8 @@ export type ServerMessage =
 /** Game → phone. */
 export type HostMessage =
   | { t: 'ping'; id: number }
-  | { t: 'status'; rttMs: number | null; paused: boolean }
+  /** `manual`: the car has a manual gearbox, so the phone shows its shift paddles. */
+  | { t: 'status'; rttMs: number | null; paused: boolean; manual?: boolean }
   /** Vibration pattern (ms on, off, on, ...). */
   | { t: 'buzz'; pattern: number[] };
 

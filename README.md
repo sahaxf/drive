@@ -25,12 +25,19 @@ npm run build
 | S / ↓ | Brake (hold at a standstill to reverse) |
 | A D / ← → | Steer |
 | Space | Handbrake |
-| C | Camera (chase / hood) |
+| C | Camera (chase / hood / windshield / bumper) |
 | R | Reset car upright |
 | T / B | Toggle traction control / ABS |
-| P / Esc | Pause (then G shadows, V engine sound, Q menu) |
+| E / Q | Gear up / down (with manual gears, set in the pause menu) |
+| P / Esc | Pause menu: restart lap, gears, assists, volume, shadows, quit |
 
-A standard gamepad also works (RT/LT pedals, left stick steers, A handbrake).
+A standard gamepad also works (RT/LT pedals, left stick steers, A handbrake, RB/LB gears).
+The pause menu follows the driving controls on any device: throttle and brake move up and
+down, steering changes a setting, the handbrake chooses.
+
+`npm run dev:http -w @drivee/game` serves the game alone over plain HTTP on
+http://localhost:5180, for tools that reject the self-signed certificate (the phone
+controller still needs the HTTPS server).
 
 ## Layout
 

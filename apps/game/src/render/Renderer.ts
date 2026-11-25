@@ -2,6 +2,7 @@ import {
   ACESFilmicToneMapping,
   DirectionalLight,
   Fog,
+  HalfFloatType,
   HemisphereLight,
   MathUtils,
   PCFShadowMap,
@@ -10,9 +11,15 @@ import {
   Scene,
   Vector3,
   WebGLRenderer,
+  WebGLRenderTarget,
   type Material,
 } from 'three';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { SpeedBlurShader } from './SpeedBlur';
 import { SHADOW_MAP_SIZE, type ShadowQuality } from '../settings';
 
 /**
@@ -38,6 +45,8 @@ const LIGHTING = {
   fogColour: '#4b5260',
 } as const;
 const SHADOW_EXTENT = 45;
+/** Below this blur strength the post-processing chain is skipped entirely. */
+const MIN_BLUR = 0.002;
 
 export class Renderer {
   readonly webgl: WebGLRenderer;
@@ -46,6 +55,9 @@ export class Renderer {
   private readonly sun = new DirectionalLight(LIGHTING.sunColour, LIGHTING.sunIntensity);
   private readonly sunDirection = new Vector3();
   private sky!: Sky;
+  private readonly composer: EffectComposer;
+  private readonly blurPass = new ShaderPass(SpeedBlurShader);
+  private blurStrength = 0;
   private readonly onResize = () => this.resize();
 
   constructor(
@@ -63,6 +75,17 @@ export class Renderer {
     this.setupLights();
     this.setShadowQuality(shadows);
     this.scene.fog = new Fog(LIGHTING.fogColour, 500, 7500);
+
+    // Post-processing only runs while there's blur to draw. The HDR target keeps
+    // highlights bright through the blur; MSAA keeps the edges as smooth as the direct path.
+    this.composer = new EffectComposer(
+      this.webgl,
+      new WebGLRenderTarget(1, 1, { type: HalfFloatType, samples: 4 }),
+    );
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.composer.addPass(this.blurPass);
+    // Tone mapping and sRGB, which the renderer does itself when drawing straight to the screen.
+    this.composer.addPass(new OutputPass());
 
     this.resize();
     window.addEventListener('resize', this.onResize);
@@ -103,9 +126,15 @@ export class Renderer {
     }
   }
 
+  /** Radial speed blur, 0 (off) to 1 (full). */
+  setMotionBlur(strength: number): void {
+    this.blurStrength = strength;
+  }
+
   /** Free the GPU context and stop following the window size. */
   dispose(): void {
     window.removeEventListener('resize', this.onResize);
+    this.composer.dispose();
     this.webgl.dispose();
     this.webgl.forceContextLoss();
     this.webgl.domElement.remove();
@@ -114,7 +143,15 @@ export class Renderer {
   render(): void {
     // The sky is a finite box; keep the camera at its centre.
     this.sky.position.copy(this.camera.position);
-    this.webgl.render(this.scene, this.camera);
+    if (this.blurStrength < MIN_BLUR) {
+      this.webgl.render(this.scene, this.camera);
+      return;
+    }
+    const u = this.blurPass.uniforms;
+    u['strength']!.value = this.blurStrength;
+    u['aspect']!.value = this.camera.aspect;
+    u['seed']!.value = (u['seed']!.value + 0.618) % 1;
+    this.composer.render();
   }
 
   private setupSky(): void {
@@ -166,6 +203,7 @@ export class Renderer {
   private resize(): void {
     const { clientWidth: w, clientHeight: h } = this.container;
     this.webgl.setSize(w, h);
+    this.composer.setSize(w, h);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
   }

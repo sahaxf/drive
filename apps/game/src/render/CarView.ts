@@ -1,4 +1,5 @@
 import {
+  BackSide,
   BoxGeometry,
   BufferGeometry,
   CubicBezierCurve,
@@ -7,6 +8,7 @@ import {
   Float32BufferAttribute,
   Group,
   LatheGeometry,
+  type Material,
   Mesh,
   MeshPhysicalMaterial,
   MeshStandardMaterial,
@@ -23,6 +25,8 @@ import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { CarSpec } from '@drivee/shared';
 import type { WheelId, WheelState } from '../vehicle/Vehicle';
+import { cameraMounts } from '../camera/CameraRig';
+import { buildCabin, steeringWheelAngle, type Cabin } from './cabin';
 import { type CarModel, fitCarModel } from './carModel';
 
 const WHEEL_IDS = ['FL', 'FR', 'RL', 'RR'] as const;
@@ -45,6 +49,12 @@ export class CarView {
   private readonly wheels = new Map<WheelId, WheelNodes>();
   private readonly brakeLight: MeshStandardMaterial;
   private readonly reverseLight: MeshStandardMaterial;
+  private readonly body = new Group();
+  private readonly glass: Material;
+  private interiorView = false;
+  /** Dark copies of the body's panels, drawn from the inside only. Made when first needed. */
+  private lining: Mesh[] | null = null;
+  private cabin: Cabin | null = null;
 
   /** `model` is the car's parsed model file, if it has one (see loadCarModel). */
   constructor(
@@ -69,7 +79,8 @@ export class CarView {
     const headLight = new MeshStandardMaterial({ color: '#fff', emissive: '#fff6dd', emissiveIntensity: 1.5 });
     const exhaust = new MeshStandardMaterial({ color: '#8a8d92', metalness: 1, roughness: 0.3 });
 
-    const body = new Group();
+    this.glass = glass;
+    const body = this.body;
     body.name = 'body';
     this.root.add(body);
     if (model) {
@@ -144,6 +155,51 @@ export class CarView {
     }
     this.brakeLight.emissiveIntensity = braking ? 4 : 0.3;
     this.reverseLight.emissiveIntensity = reversing ? 2 : 0;
+    if (this.cabin && this.interiorView) {
+      const front = wheels.find((w) => w.id === 'FL');
+      // Seen from the driver's seat, steering left turns the wheel anticlockwise.
+      if (front) this.cabin.steeringWheel.rotation.z = -steeringWheelAngle(front.steerAngle);
+    }
+  }
+
+  /**
+   * Draw the car for a camera in the driver's seat of a closed car (one with `cabin` data;
+   * others are left as they are). A body model is a shell of which only the outside is
+   * drawn, so from inside it the panels vanish and the wheels and road show through. With
+   * this on, the inside of every panel is drawn as dark lining, a dashboard and steering
+   * wheel are added, and the wheels are left out (the shell's arches are open). The glass
+   * gets no lining, which leaves the windows clear to look out of.
+   */
+  setInteriorView(on: boolean): void {
+    const cabinSpec = this.spec.cameras.cabin;
+    if (!cabinSpec || on === this.interiorView) return;
+    this.interiorView = on;
+    for (const nodes of this.wheels.values()) nodes.hub.visible = !on;
+    if (on && !this.lining) {
+      this.lining = this.buildLining();
+      this.cabin = buildCabin(cabinSpec, cameraMounts(this.spec).windshield[0]);
+      this.root.add(this.cabin.root);
+    }
+    for (const mesh of this.lining ?? []) mesh.visible = on;
+    if (this.cabin) this.cabin.root.visible = on;
+  }
+
+  /** A copy of each body panel that shows only its inner face, in dark trim. */
+  private buildLining(): Mesh[] {
+    const lining = new MeshStandardMaterial({ color: '#111216', roughness: 0.95, envMapIntensity: 0.1, side: BackSide });
+    const none = new MeshStandardMaterial({ visible: false });
+    // Glass, and anything see-through a model brings with it, is a window.
+    const line = (m: Material) => (m === this.glass || m.transparent ? none : lining);
+    const panels: Mesh[] = [];
+    this.body.traverse((object) => {
+      if ((object as Mesh).isMesh) panels.push(object as Mesh);
+    });
+    return panels.map((panel) => {
+      const material = Array.isArray(panel.material) ? panel.material.map(line) : line(panel.material);
+      const copy = new Mesh(panel.geometry, material);
+      panel.add(copy);
+      return copy;
+    });
   }
 
   /** Empty hub, steer and spin nodes for a wheel, added to the car. */

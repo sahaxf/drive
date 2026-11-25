@@ -42,6 +42,10 @@ export interface DrivetrainInput {
   forwardSpeed: number;
   /** Mean angular velocity of the driven wheels, rad/s (+ = rolling forward). */
   drivenWheelOmega: number;
+  /** The driver picks the forward gears; the gearbox only changes on `shift`. */
+  manual?: boolean;
+  /** Gear change asked for this step: +1 up, -1 down, 0 none. Manual only. */
+  shift?: number;
 }
 
 export interface DrivetrainOutput {
@@ -65,7 +69,7 @@ export function maxWheelOmega(spec: CarSpec, gear: number): number {
 }
 
 /**
- * Automatic gearbox, clutch and engine. Mutates `state`.
+ * Gearbox (automatic unless `input.manual`), clutch and engine. Mutates `state`.
  * Holding brake at a standstill selects reverse; holding throttle while in reverse
  * selects first again.
  */
@@ -85,7 +89,10 @@ export function updateDrivetrain(
   const ratio = gearRatio(gearbox, state.gear);
   const wheelRpm = Math.abs(input.drivenWheelOmega) * ratio * RAD_PER_SEC_TO_RPM;
 
-  if (!reversing) autoShift(spec, state, wheelRpm);
+  if (!reversing) {
+    if (input.manual) manualShift(spec, state, wheelRpm, input.shift ?? 0);
+    else autoShift(spec, state, wheelRpm);
+  }
   if (state.shiftTimer > 0) state.shiftTimer = Math.max(0, state.shiftTimer - dt);
 
   // Torque builds over `throttleResponse` instead of snapping on; it drops twice as fast.
@@ -135,6 +142,24 @@ function updateDirection(state: DrivetrainState, input: DrivetrainInput, dt: num
   } else {
     state.directionTimer = 0;
   }
+}
+
+/** Change gear when asked, unless a change is under way or it would over-rev the engine. */
+function manualShift(spec: CarSpec, state: DrivetrainState, wheelRpm: number, shift: number): void {
+  if (shift === 0 || state.shiftTimer > 0) return;
+  const { gearbox, engine } = spec;
+  if (shift > 0) {
+    if (state.gear >= gearbox.ratios.length) return;
+    state.gear += 1;
+    state.shiftTimer = gearbox.shiftTime;
+    return;
+  }
+  if (state.gear <= 1) return;
+  const lower = state.gear - 1;
+  const rpmAfter = (wheelRpm * gearRatio(gearbox, lower)) / gearRatio(gearbox, state.gear);
+  if (rpmAfter > engine.redlineRpm) return;
+  state.gear = lower;
+  state.shiftTimer = gearbox.shiftTime * 0.6;
 }
 
 function autoShift(spec: CarSpec, state: DrivetrainState, wheelRpm: number): void {
